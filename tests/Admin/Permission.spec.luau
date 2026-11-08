@@ -1,0 +1,36 @@
+describe("Admin Permission", function()
+	local Permission = load("ServerScriptService/Script/AdminService/Permission")
+
+	it("allows anyone in Studio", function()
+		expect(Permission.IsAdmin(true, false, 5, {})):truthy()
+	end)
+
+	it("allows the creator", function()
+		expect(Permission.IsAdmin(false, true, 5, {})):truthy()
+	end)
+
+	it("allows listed user ids only", function()
+		expect(Permission.IsAdmin(false, false, 5, { 1, 5 })):truthy()
+		expect(Permission.IsAdmin(false, false, 6, { 1, 5 })):falsy()
+	end)
+
+	it("denies by default and on bad input", function()
+		expect(Permission.IsAdmin(false, false, 5, {})):falsy()
+		expect(Permission.IsAdmin(false, false, nil, { 5 })):falsy()
+		expect(Permission.IsAdmin(false, false, 5, nil)):falsy()
+	end)
+
+	it("treats the owner of a user game as creator", function()
+		expect(Permission.IsCreator("User", 10, 10, nil, 254)):truthy()
+		expect(Permission.IsCreator("User", 10, 11, nil, 254)):falsy()
+		expect(Permission.IsCreator("User", 0, 0, nil, 254)):falsy()
+	end)
+
+	it("needs the minimum rank in a group game and denies a failed lookup", function()
+		expect(Permission.IsCreator("Group", 99, 10, 255, 254)):truthy()
+		expect(Permission.IsCreator("Group", 99, 10, 254, 254)):truthy()
+		expect(Permission.IsCreator("Group", 99, 10, 253, 254)):falsy()
+		expect(Permission.IsCreator("Group", 99, 10, nil, 254)):falsy()
+		expect(Permission.IsCreator("Unknown", 99, 10, 255, 254)):falsy()
+	end)
+end)
