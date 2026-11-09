@@ -71,14 +71,17 @@ describe("BallStats", function()
 		local TOP = 50 -- studs/s at the anchor MaxForce, arbitrary for the test
 		local r10 = BallStats.Resolve({ Speed = 10, Acceleration = 5, Jump = 5 })
 		local normalTop = TOP * 0.144 / 0.12
-		local AIR = PhysicsTable.AirTopSpeedMultiplier
+		local AIR = math.max(
+			PhysicsTable.AirTopSpeedMultiplier,
+			load("ReplicatedStorage/Shared/BallMotion").MaxDownhillMultiplier()
+		)
 
-		it("allows 1.25x the air top speed", function()
+		it("allows 1.25x the fastest terrain top speed (air or downhill)", function()
 			expect(BallStats.MaxAllowedSpeed(r10, { AnchorTopSpeed = TOP })):near(normalTop * AIR * 1.25, EPS)
 		end)
 
-		it("flags a Speed-10 ball held at 1.6x normal top speed with no boost", function()
-			expect(normalTop * 1.6 > BallStats.MaxAllowedSpeed(r10, { AnchorTopSpeed = TOP })):truthy()
+		it("flags a Speed-10 ball held at 2.5x its flat-ground top speed with no boost", function()
+			expect(normalTop * 2.5 > BallStats.MaxAllowedSpeed(r10, { AnchorTopSpeed = TOP })):truthy()
 		end)
 
 		it("allows 1.6x during a boost or rocket, without stacking them", function()

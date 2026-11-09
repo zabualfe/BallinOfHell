@@ -6,7 +6,8 @@
 -- and a Humanoid, no avatar). The ball model is cosmetic: BallService welds it to the root, massless and non-colliding,
 -- so it never rolls. Once bound, every physics step a VectorForce on the root pushes its horizontal velocity toward the
 -- humanoid's MoveDirection (the default control module, so keyboard, gamepad and touch all work); an AlignOrientation
--- holds it upright facing the camera. Jumps set vertical velocity directly; the Humanoid's own jump is disabled.
+-- holds it upright facing the camera. Steering downhill raises the target speed by the slope under the body
+-- (BallMotion.DownhillMultiplier). Jumps set vertical velocity directly; the Humanoid's own jump is disabled.
 -- BallRoll spins the cosmetic ball.
 -- All numbers come from the ball's stat attributes (BallStats contract) and the maths lives in Shared/BallMotion.
 --
@@ -52,6 +53,7 @@ local localPlayer = Players.LocalPlayer
 -- ── Tuning ──────────────────────────────────────────────────────────────
 local WAIT_TIMEOUT = 10 -- seconds for parts of the ball and character to replicate
 local GROUND_SLACK = 0.3 -- studs below the ball's surface that still count as ground
+local GROUND_SKIN = 0.1 -- studs the ground probe sphere is shrunk by, so it never starts inside the floor
 local SHADOW_RAY_LENGTH = 1000 -- studs
 local BALLS_FOLDER_NAME = PhysicsTable.Ball.FolderName
 local ALIGN_RESPONSIVENESS = 200
@@ -68,6 +70,7 @@ local gravityStack = ModifierStack.New() -- [source] = multiplier, product appli
 local velocityDrivers = {} -- list of { Source, Fn }, newest last
 local reapplyGravity = nil
 local isGroundedNow = false
+local groundNormal = nil -- Vector3? surface normal under the body from the last ground check; nil when airborne
 local moveOverride = nil -- Vector3? from a tool; replaces the humanoid's MoveDirection while set
 local jumpState = BallMotion.NewJumpState()
 local boundPrimary = nil
@@ -128,6 +131,7 @@ local function bind(ball)
 	ModifierStack.Reset(gravityStack)
 	table.clear(velocityDrivers)
 	isGroundedNow = false
+	groundNormal = nil
 	moveOverride = nil
 	trove:Add(function()
 		if boundBall == ball then
@@ -195,10 +199,15 @@ local function bind(ball)
 		params.FilterDescendantsInstances = filter
 	end)
 
-	local function isGrounded()
-		local result =
-			workspace:Raycast(root.Position, Vector3.new(0, -(root.Size.Y / 2 + GROUND_SLACK), 0), params)
-		return result ~= nil
+	-- A sphere cast (not a ray) so slopes still read as ground, and it reports the surface normal for the slope.
+	local function probeGround()
+		local result = workspace:Spherecast(
+			root.Position,
+			root.Size.Y / 2 - GROUND_SKIN,
+			Vector3.new(0, -(GROUND_SKIN + GROUND_SLACK), 0),
+			params
+		)
+		return result ~= nil, result and result.Normal
 	end
 
 	trove:Connect(UserInputService.JumpRequest, function()
@@ -213,8 +222,10 @@ local function bind(ball)
 		if not attrs.MaxForce then
 			return
 		end
-		local grounded = BallMotion.UpdateJumpState(jumpState, isGrounded(), dt)
+		local rawGrounded, normal = probeGround()
+		local grounded = BallMotion.UpdateJumpState(jumpState, rawGrounded, dt)
 		isGroundedNow = grounded
+		groundNormal = if grounded then normal else nil
 		local velocity = root.AssemblyLinearVelocity
 		local moveDirection = moveOverride or humanoid.MoveDirection
 		local speedMultiplier = ModifierStack.Max(speedStack)
@@ -234,7 +245,10 @@ local function bind(ball)
 			end
 		end
 		stepped = stepped
-			or BallMotion.Step(velocity, moveDirection, grounded, attrs, dt, { SpeedMultiplier = speedMultiplier })
+			or BallMotion.Step(velocity, moveDirection, grounded, attrs, dt, {
+				SpeedMultiplier = speedMultiplier,
+				SlopeMultiplier = BallMotion.DownhillMultiplier(groundNormal, moveDirection),
+			})
 		-- The force that reaches this frame's stepped velocity over the coming step. A frozen (anchored) body has
 		-- infinite mass, which would make the force NaN.
 		local mass = root.AssemblyMass

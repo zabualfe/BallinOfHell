@@ -40,6 +40,7 @@ local PhysicsTable = require(Tables.PhysicsTable)
 local BallTable = require(Tables.BallTable)
 local ToolTable = require(Tables.ToolTable)
 local ModifierTable = require(Tables.ModifierTable).Modifiers
+local BallMotion = require(script.Parent.BallMotion)
 
 local MIN_RATING = 1
 local MAX_RATING = 10
@@ -133,8 +134,9 @@ function BallStats.MaxAllowedSpeed(resolved, context)
 		multiplier = math.max(multiplier, ToolTable.Tools.rocket.SpeedMultiplier)
 	end
 
-	-- Steering in the air is faster than on the ground (BallMotion), so that is the top speed to allow.
-	local expected = normal * multiplier * math.max(1, PhysicsTable.AirTopSpeedMultiplier)
+	-- Steering in the air or downhill is faster than on flat ground (BallMotion), so allow the fastest of them.
+	local terrain = math.max(1, PhysicsTable.AirTopSpeedMultiplier, BallMotion.MaxDownhillMultiplier())
+	local expected = normal * multiplier * terrain
 	if context.Grappling then
 		expected = math.max(expected, ToolTable.Tools.grapple.PullSpeed)
 	end

@@ -20,6 +20,13 @@ local PhysicsTable = {
 	-- PLACEHOLDER (feel test): top speed while airborne and steering, as a multiple of the ground top speed. The
 	-- speed audit allows for it.
 	AirTopSpeedMultiplier = 1.25,
+	-- PLACEHOLDER (feel test): steering downhill on the ground raises the target speed by
+	-- 1 + DownhillSpeedPerSlope * sin(slope) * (how much of the input points downhill). Slopes past MaxSlopeDegrees
+	-- count as MaxSlopeDegrees. Uphill and across the slope change nothing. The speed audit allows the maximum.
+	Slope = {
+		DownhillSpeedPerSlope = 0.8, -- a 30 degree slope straight down gives 1.4x
+		MaxSlopeDegrees = 45,
+	},
 	-- PLACEHOLDER (M1 feel test): vertical studs/s per point of JumpPower (0.25 at rating 5 -> 50 studs/s, ~6.4 stud hop).
 	JumpVelocityScale = 200,
 

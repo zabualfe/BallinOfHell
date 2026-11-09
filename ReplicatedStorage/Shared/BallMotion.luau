@@ -3,8 +3,11 @@
 -- no side effects; BallController feeds it velocities and ball attributes (the BallStats contract) once per frame.
 --
 --   BallMotion.TargetSpeed(attrs, speedMultiplier?, grounded?) -> studs/s   -- airborne: x AirTopSpeedMultiplier
+--   BallMotion.DownhillMultiplier(groundNormal?, moveDirection) -> number >= 1   -- PhysicsTable.Slope; 1 if no normal
+--   BallMotion.MaxDownhillMultiplier() -> number                                -- at MaxSlopeDegrees, straight down
 --   BallMotion.Step(velocity, moveDirection, grounded, attrs, dt, options?) -> Vector3
---       options { SpeedMultiplier = 1, CanControl = true, CanStop = true }
+--       options { SpeedMultiplier = 1, SlopeMultiplier = 1, CanControl = true, CanStop = true }
+--       SlopeMultiplier (from DownhillMultiplier) scales the target speed on the ground only.
 --       Moving: horizontal velocity blends toward moveDirection * target speed (SmoothMoveRate toward the ground top
 --       speed on the ground; AirMoveRate toward the faster air top speed in the air). Not moving on the ground:
 --       blends to zero at SmoothStopRate. Not moving in the air: momentum is kept. Y is never touched.
@@ -49,6 +52,32 @@ function BallMotion.TargetSpeed(attrs, speedMultiplier, grounded)
 		* airMultiplier
 end
 
+local function slopeSine(slopeDegrees)
+	return math.sin(math.rad(math.clamp(slopeDegrees, 0, PhysicsTable.Slope.MaxSlopeDegrees)))
+end
+
+function BallMotion.MaxDownhillMultiplier()
+	return 1 + PhysicsTable.Slope.DownhillSpeedPerSlope * slopeSine(PhysicsTable.Slope.MaxSlopeDegrees)
+end
+
+function BallMotion.DownhillMultiplier(groundNormal, moveDirection)
+	if typeof(groundNormal) ~= "Vector3" then
+		return 1
+	end
+	-- The surface normal leans toward downhill, so its flat part is the downhill direction.
+	local downhill = Vector3.new(groundNormal.X, 0, groundNormal.Z)
+	local flatMove = Vector3.new(moveDirection.X, 0, moveDirection.Z)
+	if downhill.Magnitude < MOVE_EPSILON or flatMove.Magnitude < MOVE_EPSILON then
+		return 1
+	end
+	local alignment = flatMove.Unit:Dot(downhill.Unit)
+	if alignment <= 0 then
+		return 1
+	end
+	local slopeDegrees = math.deg(math.acos(math.clamp(groundNormal.Unit.Y, -1, 1)))
+	return 1 + PhysicsTable.Slope.DownhillSpeedPerSlope * slopeSine(slopeDegrees) * alignment
+end
+
 function BallMotion.Step(velocity, moveDirection, grounded, attrs, dt, options)
 	dt = math.clamp(dt, MIN_DT, MAX_DT)
 	local canControl = not options or options.CanControl ~= false
@@ -60,6 +89,9 @@ function BallMotion.Step(velocity, moveDirection, grounded, attrs, dt, options)
 			return velocity
 		end
 		local speed = BallMotion.TargetSpeed(attrs, options and options.SpeedMultiplier, grounded)
+		if grounded and options and options.SlopeMultiplier then
+			speed *= options.SlopeMultiplier
+		end
 		local target = flat * speed
 		if target.Magnitude > speed and speed > 0 then
 			target = target.Unit * speed

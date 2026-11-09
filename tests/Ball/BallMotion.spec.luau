@@ -42,6 +42,45 @@ describe("BallMotion", function()
 		expect(v.X):near(airTop, 0.01)
 	end)
 
+	describe("slope", function()
+		local function normalFor(degrees)
+			-- A slope that falls toward +X.
+			local r = math.rad(degrees)
+			return Vector3.new(math.sin(r), math.cos(r), 0)
+		end
+
+		it("speeds up steering straight downhill by the slope", function()
+			local expected = 1 + PhysicsTable.Slope.DownhillSpeedPerSlope * math.sin(math.rad(30))
+			expect(BallMotion.DownhillMultiplier(normalFor(30), Vector3.new(1, 0, 0))):near(expected, 1e-6)
+		end)
+
+		it("does nothing uphill, across the slope, on flat ground or with no normal", function()
+			expect(BallMotion.DownhillMultiplier(normalFor(30), Vector3.new(-1, 0, 0))):equal(1)
+			expect(BallMotion.DownhillMultiplier(normalFor(30), Vector3.new(0, 0, 1))):near(1, 1e-6)
+			expect(BallMotion.DownhillMultiplier(Vector3.yAxis, Vector3.new(1, 0, 0))):equal(1)
+			expect(BallMotion.DownhillMultiplier(nil, Vector3.new(1, 0, 0))):equal(1)
+		end)
+
+		it("caps at MaxSlopeDegrees", function()
+			local steep = BallMotion.DownhillMultiplier(normalFor(80), Vector3.new(1, 0, 0))
+			expect(steep):near(BallMotion.MaxDownhillMultiplier(), 1e-6)
+		end)
+
+		it("raises the ground target speed but not the air one", function()
+			local options = { SlopeMultiplier = 1.4 }
+			local v = Vector3.zero
+			for _ = 1, 600 do
+				v = BallMotion.Step(v, Vector3.new(1, 0, 0), true, attrs, 1 / 60, options)
+			end
+			expect(v.X):near(top * 1.4, 0.01)
+			local air = Vector3.zero
+			for _ = 1, 600 do
+				air = BallMotion.Step(air, Vector3.new(1, 0, 0), false, attrs, 1 / 60, options)
+			end
+			expect(air.X):near(BallMotion.TargetSpeed(attrs, nil, false), 0.01)
+		end)
+	end)
+
 	it("stops on the ground faster than it accelerates", function()
 		expect(attrs.SmoothStopRate > attrs.SmoothMoveRate):truthy()
 	end)
