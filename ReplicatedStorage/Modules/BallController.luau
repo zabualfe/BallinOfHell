@@ -1,8 +1,14 @@
 -- BallController
 -- Client-owned ball movement (the server audits it, BallService). The ball is found in workspace.Balls by its
 -- Player attribute (UserId), never through a remote Instance, which would arrive nil if it had not streamed in.
--- BallSpawned is only a "rescan now" nudge. Once bound, every physics step: horizontal velocity blends toward the humanoid's MoveDirection (the default control
--- module, so keyboard, gamepad and touch all work), jumps set vertical velocity, and the character rides the ball.
+-- BallSpawned is only a "rescan now" nudge.
+-- The player's HumanoidRootPart is the only physical body (StarterPlayer.StarterCharacter: a frictionless sphere part
+-- and a Humanoid, no avatar). The ball model is cosmetic: BallService welds it to the root, massless and non-colliding,
+-- so it never rolls. Once bound, every physics step a VectorForce on the root pushes its horizontal velocity toward the
+-- humanoid's MoveDirection (the default control module, so keyboard, gamepad and touch all work); an AlignOrientation
+-- holds it upright facing the camera. Steering downhill raises the target speed by the slope under the body
+-- (BallMotion.DownhillMultiplier). Jumps set vertical velocity directly; the Humanoid's own jump is disabled.
+-- BallRoll spins the cosmetic ball.
 -- All numbers come from the ball's stat attributes (BallStats contract) and the maths lives in Shared/BallMotion.
 --
 -- Hooks for other client systems (ObstacleController, tools):
@@ -21,6 +27,7 @@
 --   BallController.SetMoveOverride(direction?)      -- tools (Rocket): steer toward this world direction instead of the
 --                                                      humanoid's MoveDirection; nil gives control back
 --   BallController.GetBall() -> Model?
+--   BallController.IsOwnBodyPart(part) -> boolean   -- part of the bound ball or the local root part (touch triggers)
 --   BallController.Unbound   Signal ()      -- fired when the ball is released (despawn, respawn, character removed)
 -- Network in: BallSpawned() and BallPivot(cframe) from BallService.
 -- Authored optional asset: ReplicatedStorage.Assets.DropShadow (a Part shown under the ball while airborne).
@@ -46,13 +53,12 @@ local localPlayer = Players.LocalPlayer
 -- ── Tuning ──────────────────────────────────────────────────────────────
 local WAIT_TIMEOUT = 10 -- seconds for parts of the ball and character to replicate
 local GROUND_SLACK = 0.3 -- studs below the ball's surface that still count as ground
+local GROUND_SKIN = 0.1 -- studs the ground probe sphere is shrunk by, so it never starts inside the floor
 local SHADOW_RAY_LENGTH = 1000 -- studs
-local SEAT_GAP = PhysicsTable.Ball.SeatGapStuds
 local BALLS_FOLDER_NAME = PhysicsTable.Ball.FolderName
 local ALIGN_RESPONSIVENESS = 200
-local MOVING_SPEED = 0.5 -- studs/s, below this a grounded ball with no input plays the idle pose
+local MIN_FORCE_DT = 1 / 240 -- seconds, a tiny frame must not blow the force up
 local JUMP_IGNORE_TAG = "JumpIgnore"
-local ANIMATION_FOLDERS = { Rolling = "run", Falling = "fall", Standing = "idle" } -- Animate script children
 
 local characterTrove = nil -- one per life
 local bindTrove = nil -- one per ball, child of characterTrove
@@ -64,44 +70,12 @@ local gravityStack = ModifierStack.New() -- [source] = multiplier, product appli
 local velocityDrivers = {} -- list of { Source, Fn }, newest last
 local reapplyGravity = nil
 local isGroundedNow = false
+local groundNormal = nil -- Vector3? surface normal under the body from the last ground check; nil when airborne
 local moveOverride = nil -- Vector3? from a tool; replaces the humanoid's MoveDirection while set
 local jumpState = BallMotion.NewJumpState()
 local boundPrimary = nil
+local boundRoot = nil -- the HumanoidRootPart that carries the bound ball
 local warnedShadow = false
-
-local function getFirstTrack(animate, folderName)
-	local folder = animate:FindFirstChild(folderName)
-	local animation = folder and folder:FindFirstChildOfClass("Animation")
-	return animation
-end
-
-local function loadAnimations(humanoid)
-	local tracks = {}
-	local animate = character and character:FindFirstChild("Animate")
-	local animator = humanoid:FindFirstChildOfClass("Animator")
-	if not (animate and animator) then
-		return tracks
-	end
-	for name, folderName in ANIMATION_FOLDERS do
-		local animation = getFirstTrack(animate, folderName)
-		if animation then
-			tracks[name] = animator:LoadAnimation(animation)
-		end
-	end
-	return tracks
-end
-
-local function playAnimation(tracks, name)
-	for trackName, track in tracks do
-		if trackName ~= name and track.IsPlaying then
-			track:Stop()
-		end
-	end
-	local track = tracks[name]
-	if track and not track.IsPlaying then
-		track:Play()
-	end
-end
 
 local function makeShadow()
 	local assets = ReplicatedStorage:FindFirstChild("Assets")
@@ -150,17 +124,18 @@ local function bind(ball)
 		return
 	end
 
-	boundBall, boundPrimary = ball, primary
+	boundBall, boundPrimary, boundRoot = ball, primary, root
 	local attrs = ball:GetAttributes()
 	jumpState = BallMotion.NewJumpState()
 	ModifierStack.Reset(speedStack)
 	ModifierStack.Reset(gravityStack)
 	table.clear(velocityDrivers)
 	isGroundedNow = false
+	groundNormal = nil
 	moveOverride = nil
 	trove:Add(function()
 		if boundBall == ball then
-			boundBall, boundPrimary = nil, nil
+			boundBall, boundPrimary, boundRoot = nil, nil, nil
 		end
 		reapplyGravity = nil
 	end)
@@ -185,15 +160,16 @@ local function bind(ball)
 		end
 	end)
 
-	-- The character rides the ball: position follows a point above it, facing follows the camera.
-	local alignPosition = Instance.new("AlignPosition")
-	alignPosition.Mode = Enum.PositionAlignmentMode.OneAttachment
-	alignPosition.Attachment0 = rootAttachment
-	alignPosition.MaxForce = math.huge
-	alignPosition.Responsiveness = ALIGN_RESPONSIVENESS
-	alignPosition.Parent = root
-	trove:Add(alignPosition)
+	-- Movement is a force on the root, not a velocity write; the root is frictionless, so this force alone moves it.
+	local vectorForce = Instance.new("VectorForce")
+	vectorForce.Attachment0 = rootAttachment
+	vectorForce.RelativeTo = Enum.ActuatorRelativeTo.World
+	vectorForce.ApplyAtCenterOfMass = true
+	vectorForce.Force = Vector3.zero
+	vectorForce.Parent = root
+	trove:Add(vectorForce)
 
+	-- Keeps the root upright and facing the camera, so nothing ever rolls.
 	local alignOrientation = Instance.new("AlignOrientation")
 	alignOrientation.Mode = Enum.OrientationAlignmentMode.OneAttachment
 	alignOrientation.Attachment0 = rootAttachment
@@ -203,21 +179,6 @@ local function bind(ball)
 	trove:Add(alignOrientation)
 
 	humanoid:ChangeState(Enum.HumanoidStateType.Physics)
-	for _, track in humanoid:GetPlayingAnimationTracks() do
-		track:Stop()
-	end
-	local tracks = loadAnimations(humanoid)
-	trove:Add(function()
-		for _, track in tracks do
-			track:Stop()
-		end
-	end)
-
-	local characterHalf = character:GetExtentsSize().Y / 2
-	local function seatPosition()
-		return primary.Position + Vector3.new(0, primary.Size.Y / 2 + characterHalf + SEAT_GAP, 0)
-	end
-	character:PivotTo(CFrame.new(seatPosition()))
 
 	-- Ground check ignores the ball, the character, the shadow and anything tagged JumpIgnore.
 	local shadow = makeShadow()
@@ -238,10 +199,15 @@ local function bind(ball)
 		params.FilterDescendantsInstances = filter
 	end)
 
-	local function isGrounded()
-		local result =
-			workspace:Raycast(primary.Position, Vector3.new(0, -(primary.Size.Y / 2 + GROUND_SLACK), 0), params)
-		return result ~= nil
+	-- A sphere cast (not a ray) so slopes still read as ground, and it reports the surface normal for the slope.
+	local function probeGround()
+		local result = workspace:Spherecast(
+			root.Position,
+			root.Size.Y / 2 - GROUND_SKIN,
+			Vector3.new(0, -(GROUND_SKIN + GROUND_SLACK), 0),
+			params
+		)
+		return result ~= nil, result and result.Normal
 	end
 
 	trove:Connect(UserInputService.JumpRequest, function()
@@ -249,17 +215,18 @@ local function bind(ball)
 		if not kind then
 			return
 		end
-		primary.AssemblyLinearVelocity = BallMotion.ApplyJump(primary.AssemblyLinearVelocity, kind, attrs)
-		playAnimation(tracks, "Falling")
+		root.AssemblyLinearVelocity = BallMotion.ApplyJump(root.AssemblyLinearVelocity, kind, attrs)
 	end)
 
 	trove:Connect(RunService.PreSimulation, function(dt)
 		if not attrs.MaxForce then
 			return
 		end
-		local grounded = BallMotion.UpdateJumpState(jumpState, isGrounded(), dt)
+		local rawGrounded, normal = probeGround()
+		local grounded = BallMotion.UpdateJumpState(jumpState, rawGrounded, dt)
 		isGroundedNow = grounded
-		local velocity = primary.AssemblyLinearVelocity
+		groundNormal = if grounded then normal else nil
+		local velocity = root.AssemblyLinearVelocity
 		local moveDirection = moveOverride or humanoid.MoveDirection
 		local speedMultiplier = ModifierStack.Max(speedStack)
 		local stepped = nil
@@ -278,23 +245,28 @@ local function bind(ball)
 			end
 		end
 		stepped = stepped
-			or BallMotion.Step(velocity, moveDirection, grounded, attrs, dt, { SpeedMultiplier = speedMultiplier })
-		if stepped ~= velocity then
-			primary.AssemblyLinearVelocity = stepped
-		end
+			or BallMotion.Step(velocity, moveDirection, grounded, attrs, dt, {
+				SpeedMultiplier = speedMultiplier,
+				SlopeMultiplier = BallMotion.DownhillMultiplier(groundNormal, moveDirection),
+			})
+		-- The force that reaches this frame's stepped velocity over the coming step. A frozen (anchored) body has
+		-- infinite mass, which would make the force NaN.
+		local mass = root.AssemblyMass
+		vectorForce.Force = if mass < math.huge
+			then (stepped - velocity) * mass / math.max(dt, MIN_FORCE_DT)
+			else Vector3.zero
 
 		local camera = workspace.CurrentCamera
 		if camera then
 			local _, yaw = camera.CFrame:ToOrientation()
 			alignOrientation.CFrame = CFrame.fromOrientation(0, yaw, 0)
 		end
-		alignPosition.Position = seatPosition()
 
 		if shadow then
 			if grounded then
 				shadow.Parent = nil
 			else
-				local hit = workspace:Raycast(primary.Position, Vector3.new(0, -SHADOW_RAY_LENGTH, 0), params)
+				local hit = workspace:Raycast(root.Position, Vector3.new(0, -SHADOW_RAY_LENGTH, 0), params)
 				if hit then
 					shadow.Position = hit.Position
 					shadow.Parent = workspace
@@ -302,14 +274,6 @@ local function bind(ball)
 					shadow.Parent = nil
 				end
 			end
-		end
-
-		if not grounded then
-			playAnimation(tracks, "Falling")
-		elseif moveDirection.Magnitude > 1e-3 then
-			playAnimation(tracks, "Rolling")
-		elseif Vector3.new(stepped.X, 0, stepped.Z).Magnitude < MOVING_SPEED then
-			playAnimation(tracks, "Standing")
 		end
 	end)
 
@@ -386,7 +350,14 @@ function BallController.SetVelocityDriver(source, fn)
 end
 
 function BallController.IsGrounded()
-	return boundPrimary ~= nil and isGroundedNow
+	return boundRoot ~= nil and isGroundedNow
+end
+
+function BallController.IsOwnBodyPart(part)
+	if not boundBall then
+		return false
+	end
+	return part:IsDescendantOf(boundBall) or part == boundRoot
 end
 
 function BallController.SetMoveOverride(direction)
@@ -394,11 +365,11 @@ function BallController.SetMoveOverride(direction)
 end
 
 function BallController.ApplyJumpPad(jumpPower)
-	if not (boundPrimary and type(jumpPower) == "number") then
+	if not (boundRoot and type(jumpPower) == "number") then
 		return
 	end
 	BallMotion.MarkLaunched(jumpState)
-	boundPrimary.AssemblyLinearVelocity = BallMotion.ApplyLaunch(boundPrimary.AssemblyLinearVelocity, jumpPower)
+	boundRoot.AssemblyLinearVelocity = BallMotion.ApplyLaunch(boundRoot.AssemblyLinearVelocity, jumpPower)
 end
 
 function BallController.GetBall()
@@ -410,6 +381,12 @@ function BallController.CharacterAdded(_, newCharacter)
 		characterTrove:Destroy()
 	end
 	character = newCharacter
+	-- Jump input still fires JumpRequest (and keeps the touch jump button), but only our jump acts on it.
+	local humanoid = newCharacter:FindFirstChildOfClass("Humanoid")
+		or newCharacter:WaitForChild("Humanoid", WAIT_TIMEOUT)
+	if humanoid and character == newCharacter then
+		humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, false)
+	end
 	characterTrove = Trove.new()
 	bindTrove, bindingBall = nil, nil
 	tryBind()
@@ -438,12 +415,8 @@ Network.OnEvent("BallPivot", function(cframe)
 			descendant.AssemblyAngularVelocity = Vector3.zero
 		end
 	end
+	-- The ball is welded to the root, so moving it moves the whole body.
 	ball:PivotTo(cframe)
-	if character then
-		character:PivotTo(
-			cframe * CFrame.new(0, boundPrimary.Size.Y / 2 + character:GetExtentsSize().Y / 2 + SEAT_GAP, 0)
-		)
-	end
 	jumpState = BallMotion.NewJumpState()
 end)
 

@@ -61,6 +61,8 @@ In the race: big air makes your rider do automatic tricks for bonus coins (§7).
 
 ### Round flow (`RoundService` steps)
 
+> **Superseded 2026-11-09 (Director):** there are no round steps for now. The course is built once when the server starts, chained from `workspace.Lobby.Start`'s pivot, and stays up. Players spawn in the lobby already in ball mode and roll onto the course; a finish sends them back to the lobby after 5 s for a new run. The table below is the old design, kept for when rounds return.
+
 | Step | Duration | What happens | UI |
 |---|---|---|---|
 | **Intermission** | 20 s | Players are in the lobby (shop, wheel, gifts open). If 0 players are in the server, the step waits. | Big "Next race in 0:20". Countdown beeps at 5..1. |
@@ -109,7 +111,7 @@ Mobile layout rule: no gameplay button within 24 px of the screen edge or over t
 
 ### Stat → physics formula (`BallStats.Resolve`)
 
-Anchor: **rating 5 equals the reference `BallSystem` constants** (MaxForce 0.12, SmoothMoveRate 10, AirMoveRate 6, JumpPower 0.25). SmoothStopRate stays at the reference 6 for every ball. Double jump keeps the reference 1.1× JumpPower.
+Anchor: **rating 5 equals the reference `BallSystem` constants** (MaxForce 0.12, SmoothMoveRate 10, AirMoveRate 6, JumpPower 0.25). Letting go on the ground sheds a constant **20% of the ball's ground top speed per second** (`PhysicsTable.GroundDecelerationPerSecond`, *tune*), so a ball rolls down to a slow creep (about 4.5 s and 100 studs from 40 studs/s) instead of halting; below 4 studs/s it fades exponentially (`PhysicsTable.GroundCreep`, *tune*) and drifts a couple of studs before it settles. SmoothStopRate is **6** for every ball and only drives the Brake tool. While airborne and steering, top speed is **1.25×** the ground top speed (`PhysicsTable.AirTopSpeedMultiplier`, *tune*); the speed audit allows for it. Steering downhill on the ground raises the target speed by `1 + 0.8 · sin(slope) · (share of input pointing downhill)`, slopes capped at 45° (`PhysicsTable.Slope`, *tune*); uphill changes nothing. The slope comes from a sphere cast under the body. Double jump keeps the reference 1.1× JumpPower. Jump velocity is JumpPower × **260** studs/s (`PhysicsTable.JumpVelocityScale`, *tune*; 200 before 2026-11-09), so 65 studs/s and about a 10.8 stud hop at rating 5.
 
 | Stat (1–10) | Multiplier `m(r)` | Drives | Range at r=1 … r=10 |
 |---|---|---|---|

@@ -2,11 +2,17 @@
 -- Pure movement maths for the client-owned ball (ported from the reference BallSystem:Update / Jump). No Instances,
 -- no side effects; BallController feeds it velocities and ball attributes (the BallStats contract) once per frame.
 --
---   BallMotion.TargetSpeed(attrs, speedMultiplier?) -> studs/s
+--   BallMotion.TargetSpeed(attrs, speedMultiplier?, grounded?) -> studs/s   -- airborne: x AirTopSpeedMultiplier
+--   BallMotion.DownhillMultiplier(groundNormal?, moveDirection) -> number >= 1   -- PhysicsTable.Slope; 1 if no normal
+--   BallMotion.MaxDownhillMultiplier() -> number                                -- at MaxSlopeDegrees, straight down
 --   BallMotion.Step(velocity, moveDirection, grounded, attrs, dt, options?) -> Vector3
---       options { SpeedMultiplier = 1, CanControl = true, CanStop = true }
---       Moving: horizontal velocity blends toward moveDirection * target speed (SmoothMoveRate on the ground,
---       AirMoveRate in the air). Not moving on the ground: blends to zero at SmoothStopRate. Y is never touched.
+--       options { SpeedMultiplier = 1, SlopeMultiplier = 1, CanControl = true, CanStop = true }
+--       SlopeMultiplier (from DownhillMultiplier) scales the target speed on the ground only.
+--       Moving: horizontal velocity blends toward moveDirection * target speed (SmoothMoveRate toward the ground top
+--       speed on the ground; AirMoveRate toward the faster air top speed in the air). Not moving on the ground:
+--       horizontal speed drops by GroundDecelerationPerSecond x its top speed each second down to GroundCreep.Speed,
+--       then fades at GroundCreep.DecayRate so the ball drifts a little before it settles. Not moving in the air:
+--       momentum is kept. Y is never touched.
 --   BallMotion.NewJumpState() / UpdateJumpState(state, rawGrounded, dt) -> grounded / RequestJump(state, doubleJumpEnabled)
 --       -> "Jump" | "DoubleJump" | nil
 --   BallMotion.MarkLaunched(state)                  -- after a jump pad
@@ -31,7 +37,7 @@ local BallMotion = {}
 local MIN_DT = 1e-4 -- seconds
 local MAX_DT = 0.1 -- seconds, a hitch must not slingshot the blend
 local MOVE_EPSILON = 1e-3 -- input magnitude below this counts as no input
-local STOP_SNAP_SPEED = 0.08 -- studs/s per axis, below this a stopping ball is set to zero
+local SETTLE_SPEED = 0.05 -- studs/s, a creeping ball below this is set to rest
 local COYOTE_SECONDS = 0.1 -- ground jump still allowed this long after leaving the ground
 local ARRIVE_RADIUS = 3 -- studs from a grapple anchor that count as arrived
 local JUMP_LOCKOUT_SECONDS = 0.15 -- ground check is ignored this long after a jump so it can't reset the jump state
@@ -40,8 +46,38 @@ local function blend(current, target, rate, dt)
 	return current + (target - current) * (1 - math.exp(-rate * dt))
 end
 
-function BallMotion.TargetSpeed(attrs, speedMultiplier)
-	return attrs.MaxForce * (PhysicsTable.AnchorTopSpeed / PhysicsTable.Anchor.MaxForce) * (speedMultiplier or 1)
+function BallMotion.TargetSpeed(attrs, speedMultiplier, grounded)
+	local airMultiplier = if grounded == false then PhysicsTable.AirTopSpeedMultiplier else 1
+	return attrs.MaxForce
+		* (PhysicsTable.AnchorTopSpeed / PhysicsTable.Anchor.MaxForce)
+		* (speedMultiplier or 1)
+		* airMultiplier
+end
+
+local function slopeSine(slopeDegrees)
+	return math.sin(math.rad(math.clamp(slopeDegrees, 0, PhysicsTable.Slope.MaxSlopeDegrees)))
+end
+
+function BallMotion.MaxDownhillMultiplier()
+	return 1 + PhysicsTable.Slope.DownhillSpeedPerSlope * slopeSine(PhysicsTable.Slope.MaxSlopeDegrees)
+end
+
+function BallMotion.DownhillMultiplier(groundNormal, moveDirection)
+	if typeof(groundNormal) ~= "Vector3" then
+		return 1
+	end
+	-- The surface normal leans toward downhill, so its flat part is the downhill direction.
+	local downhill = Vector3.new(groundNormal.X, 0, groundNormal.Z)
+	local flatMove = Vector3.new(moveDirection.X, 0, moveDirection.Z)
+	if downhill.Magnitude < MOVE_EPSILON or flatMove.Magnitude < MOVE_EPSILON then
+		return 1
+	end
+	local alignment = flatMove.Unit:Dot(downhill.Unit)
+	if alignment <= 0 then
+		return 1
+	end
+	local slopeDegrees = math.deg(math.acos(math.clamp(groundNormal.Unit.Y, -1, 1)))
+	return 1 + PhysicsTable.Slope.DownhillSpeedPerSlope * slopeSine(slopeDegrees) * alignment
 end
 
 function BallMotion.Step(velocity, moveDirection, grounded, attrs, dt, options)
@@ -54,7 +90,10 @@ function BallMotion.Step(velocity, moveDirection, grounded, attrs, dt, options)
 		if not canControl then
 			return velocity
 		end
-		local speed = BallMotion.TargetSpeed(attrs, options and options.SpeedMultiplier)
+		local speed = BallMotion.TargetSpeed(attrs, options and options.SpeedMultiplier, grounded)
+		if grounded and options and options.SlopeMultiplier then
+			speed *= options.SlopeMultiplier
+		end
 		local target = flat * speed
 		if target.Magnitude > speed and speed > 0 then
 			target = target.Unit * speed
@@ -64,16 +103,20 @@ function BallMotion.Step(velocity, moveDirection, grounded, attrs, dt, options)
 	end
 
 	if grounded and canStop then
-		local keep = 1 - (1 - math.exp(-attrs.SmoothStopRate * dt))
-		local x = velocity.X * keep
-		local z = velocity.Z * keep
-		if math.abs(x) < STOP_SNAP_SPEED then
-			x = 0
+		local horizontal = Vector3.new(velocity.X, 0, velocity.Z)
+		local speed = horizontal.Magnitude
+		local creep = PhysicsTable.GroundCreep
+		local slowed = if speed > creep.Speed
+			then math.max(
+				speed - PhysicsTable.GroundDecelerationPerSecond * BallMotion.TargetSpeed(attrs) * dt,
+				creep.Speed
+			)
+			else speed * math.exp(-creep.DecayRate * dt)
+		if slowed < SETTLE_SPEED then
+			return Vector3.new(0, velocity.Y, 0)
 		end
-		if math.abs(z) < STOP_SNAP_SPEED then
-			z = 0
-		end
-		return Vector3.new(x, velocity.Y, z)
+		local kept = horizontal * (slowed / speed)
+		return Vector3.new(kept.X, velocity.Y, kept.Z)
 	end
 
 	return velocity

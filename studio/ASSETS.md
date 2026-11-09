@@ -6,6 +6,7 @@
 | EndTrack | Model | Programmer (T-004b) | Studio | `ServerStorage.CourseParts.EndTrack` (finish platform + arch, no EndPart) | placeholder | |
 | CheckpointFlag | Model | Programmer (T-004b) | Studio | `ServerStorage.CourseParts.CheckpointFlag` (non-colliding joint arch) | placeholder | |
 | Ball models (23, by ModelName) | Model | Programmer (T-004b) | Studio | `ServerStorage.Balls.<ModelName>` (Ball part, 4 stud sphere, rarity colour) | placeholder | |
+| StarterCharacter | Model | Programmer | Studio | `StarterPlayer.StarterCharacter` (Humanoid + 4-stud white sphere HumanoidRootPart with RootAttachment, frictionless CustomPhysicalProperties; `LoadCharacterAppearance` off) | placeholder | The root part is the only physical body; the ball is a cosmetic shell welded to it |
 | Lobby | Model | Programmer (T-004b) | Studio | `Workspace.Lobby` (Spawn SpawnLocation at 0,21.5,300) | placeholder | |
 | Present | Model | Programmer (T-004b) | Studio | `ReplicatedStorage.Assets.Present` (ProximityPrompt) | placeholder | |
 | Trail | VFX | Programmer (T-004b) | Studio | `ReplicatedStorage.Assets.Trail` | placeholder | |

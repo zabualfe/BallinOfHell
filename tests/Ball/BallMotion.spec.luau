@@ -31,6 +31,75 @@ describe("BallMotion", function()
 		expect(t):near(math.log(10) / attrs.SmoothMoveRate, 0.02)
 	end)
 
+	it("has a faster top speed in the air than on the ground", function()
+		local airTop = BallMotion.TargetSpeed(attrs, nil, false)
+		expect(airTop):near(top * PhysicsTable.AirTopSpeedMultiplier, 0.0001)
+		expect(BallMotion.TargetSpeed(attrs, nil, true)):near(top, 0.0001)
+		local v = Vector3.zero
+		for _ = 1, 600 do
+			v = BallMotion.Step(v, Vector3.new(1, 0, 0), false, attrs, 1 / 60)
+		end
+		expect(v.X):near(airTop, 0.01)
+	end)
+
+	describe("slope", function()
+		local function normalFor(degrees)
+			-- A slope that falls toward +X.
+			local r = math.rad(degrees)
+			return Vector3.new(math.sin(r), math.cos(r), 0)
+		end
+
+		it("speeds up steering straight downhill by the slope", function()
+			local expected = 1 + PhysicsTable.Slope.DownhillSpeedPerSlope * math.sin(math.rad(30))
+			expect(BallMotion.DownhillMultiplier(normalFor(30), Vector3.new(1, 0, 0))):near(expected, 1e-6)
+		end)
+
+		it("does nothing uphill, across the slope, on flat ground or with no normal", function()
+			expect(BallMotion.DownhillMultiplier(normalFor(30), Vector3.new(-1, 0, 0))):equal(1)
+			expect(BallMotion.DownhillMultiplier(normalFor(30), Vector3.new(0, 0, 1))):near(1, 1e-6)
+			expect(BallMotion.DownhillMultiplier(Vector3.yAxis, Vector3.new(1, 0, 0))):equal(1)
+			expect(BallMotion.DownhillMultiplier(nil, Vector3.new(1, 0, 0))):equal(1)
+		end)
+
+		it("caps at MaxSlopeDegrees", function()
+			local steep = BallMotion.DownhillMultiplier(normalFor(80), Vector3.new(1, 0, 0))
+			expect(steep):near(BallMotion.MaxDownhillMultiplier(), 1e-6)
+		end)
+
+		it("raises the ground target speed but not the air one", function()
+			local options = { SlopeMultiplier = 1.4 }
+			local v = Vector3.zero
+			for _ = 1, 600 do
+				v = BallMotion.Step(v, Vector3.new(1, 0, 0), true, attrs, 1 / 60, options)
+			end
+			expect(v.X):near(top * 1.4, 0.01)
+			local air = Vector3.zero
+			for _ = 1, 600 do
+				air = BallMotion.Step(air, Vector3.new(1, 0, 0), false, attrs, 1 / 60, options)
+			end
+			expect(air.X):near(BallMotion.TargetSpeed(attrs, nil, false), 0.01)
+		end)
+	end)
+
+	it("sheds GroundDecelerationPerSecond of top speed each second on the ground instead of halting", function()
+		local deceleration = PhysicsTable.GroundDecelerationPerSecond * top
+		local v = BallMotion.Step(Vector3.new(30, 4, 0), Vector3.zero, true, attrs, 0.1)
+		expect(v.X):near(30 - deceleration * 0.1, 1e-6)
+		expect(v.Y):equal(4)
+		local diagonal = BallMotion.Step(Vector3.new(30, 0, 40), Vector3.zero, true, attrs, 0.1)
+		expect(diagonal.Magnitude):near(50 - deceleration * 0.1, 1e-6)
+		expect(diagonal.X / diagonal.Z):near(30 / 40, 1e-6)
+	end)
+
+	it("creeps below GroundCreep.Speed instead of stopping dead", function()
+		local creep = PhysicsTable.GroundCreep
+		local fast = BallMotion.Step(Vector3.new(creep.Speed + 0.5, 0, 0), Vector3.zero, true, attrs, 0.1)
+		expect(fast.X):near(creep.Speed, 1e-6)
+		local slow = BallMotion.Step(Vector3.new(2, 0, 0), Vector3.zero, true, attrs, 0.1)
+		expect(slow.X):near(2 * math.exp(-creep.DecayRate * 0.1), 1e-6)
+		expect(slow.X > 0):truthy()
+	end)
+
 	it("steers slower in the air than on the ground", function()
 		local ground = BallMotion.Step(Vector3.zero, Vector3.new(0, 0, 1), true, attrs, 0.1)
 		local air = BallMotion.Step(Vector3.zero, Vector3.new(0, 0, 1), false, attrs, 0.1)

@@ -5,7 +5,12 @@ describe("SpeedAudit", function()
 
 	local DT = PhysicsTable.SpeedAudit.SampleSeconds
 	local sprinter = BallStats.ForBall("sprinter")
-	local normalTop = PhysicsTable.AnchorTopSpeed * sprinter.MaxForce / PhysicsTable.Anchor.MaxForce
+	-- The fastest legal speed: steering in the air or down the steepest counted slope (BallMotion).
+	local terrain = math.max(
+		PhysicsTable.AirTopSpeedMultiplier,
+		load("ReplicatedStorage/Shared/BallMotion").MaxDownhillMultiplier()
+	)
+	local normalTop = PhysicsTable.AnchorTopSpeed * sprinter.MaxForce / PhysicsTable.Anchor.MaxForce * terrain
 
 	-- Fake clock: runs 10 Hz samples at a constant speed, returns the time of the first strike (or nil).
 	local function run(tracker, resolved, speed, seconds, startTime)
@@ -26,11 +31,11 @@ describe("SpeedAudit", function()
 		expect(SpeedAudit.Limit(tracker, sprinter, 0)):near(normalTop * 1.25, 1e-6)
 	end)
 
-	it("strikes a Speed-10 ball held at 1.6x its normal top speed for 2 s", function()
+	it("strikes a Speed-10 ball held at 2.5x its flat-ground top speed for 2 s", function()
 		local fast = BallStats.Resolve({ Speed = 10, Acceleration = 5, Jump = 5 })
 		local top = PhysicsTable.AnchorTopSpeed * fast.MaxForce / PhysicsTable.Anchor.MaxForce
 		local tracker = SpeedAudit.NewTracker()
-		local struckAt = run(tracker, fast, top * 1.6, 2)
+		local struckAt = run(tracker, fast, top * 2.5, 2)
 		expect(struckAt ~= nil):truthy()
 		expect(struckAt <= 2):truthy()
 	end)

@@ -2,6 +2,16 @@
 
 Newest first. Director decisions are marked 🎬. Routine team calls are marked 🛠.
 
+## 2026-11-09
+- 🎬 **More jump power: `JumpVelocityScale` 200 → 260 (+30%).** A rating 5 ball now jumps at 65 studs/s (about a 10.8 stud hop, was 6.4). Double jump keeps its 1.1× on top.
+- 🎬 **Ground deceleration is 20% of the ball's top speed per second** (`GroundDecelerationPerSecond = 0.2`, replacing the flat 60 studs/s²). From 40 studs/s that is 8 studs/s²: about 4.5 s and 100 studs down to the 4 studs/s creep, then about 2 s of creep.
+- 🎬 **Balls decelerate instead of stopping instantly.** Letting go on the ground now sheds a constant 60 studs/s² (`GroundDeceleration`, tune): 40 studs/s rolls to a stop in 0.67 s over about 13 studs. The exponential stop at SmoothStopRate 20 dropped most of the speed in the first 0.1 s, which read as an instant stop. SmoothStopRate is back to 6 and only drives the Brake tool. Below 4 studs/s the ball then creeps, fading at rate 1.5/s (`GroundCreep`, tune), so it drifts about 2.7 studs over a few seconds instead of a perfect dead stop.
+- 🎬 **No more lobby/round loop: the course is built once at server start and stays up.** It always chains from `workspace.Lobby.Start`'s pivot, so it runs out of the lobby. Players spawn in the lobby already in ball mode (right after the starter pick for new players) and roll onto the course; finishing returns them to the lobby after 5 s for a fresh run. The round steps, StepRunner and RoundMath are deleted. Side effects until rounds come back in some form: per-round systems (tool charges, trick caps, season rounds, modifiers) no longer reset, checkpoint coins pay again on every run, there is no round clock or finish multiplier, and the season bar unlocks on the player's first finish.
+- 🎬 **Downhill is faster; uphill is unchanged.** The ground probe is now a sphere cast that records the surface normal; steering downhill multiplies the ground target speed by up to 1.57× at 45°. The speed audit allows that maximum.
+- 🎬 **The cosmetic ball rolls by CFrame; jump only sets upward velocity; ground stops fast; air top speed is higher.** BallRoll spins each ball through its root Weld's C0 on every client. The Humanoid's own jump is disabled. SmoothStopRate 6 → 20. Airborne steering targets 1.25× the ground top speed (`AirTopSpeedMultiplier`, tune) and the speed audit allows it.
+- 🎬 **The ball is purely cosmetic; a VectorForce moves the player's part.** The root part (a frictionless 4-stud sphere) is the only physical body. The ball model is welded to it, massless and non-colliding, and an AlignOrientation keeps anything from rolling. Why: back to basics on core movement.
+- 🎬 **The player character is just a Humanoid and its root part.** `StarterPlayer.StarterCharacter` replaces the avatar (`LoadCharacterAppearance` off), and the rider animations are gone from BallController. Why: back to basics on core ball movement. Trick animations have no rider to play on until tricks get a new form.
+
 ## 2026-11-08 (Sprint 5)
 - 🎬 **The Studio place is "ballin v2 the sequel"** (placeId 122054442557559). "KC Dev" is a different project; don't touch it.
 - 🎬 **Remaining UI is designed in Figma this sprint.**

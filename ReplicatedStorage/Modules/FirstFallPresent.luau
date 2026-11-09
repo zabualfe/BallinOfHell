@@ -51,10 +51,6 @@ local function claim()
 	destroyPresent()
 end
 
-local function isOwnBall(part)
-	local ball = BallController.GetBall()
-	return ball ~= nil and part:IsDescendantOf(ball)
-end
 
 local function findTemplate()
 	local assets = ReplicatedStorage:FindFirstChild(ASSET_FOLDER)
@@ -91,7 +87,7 @@ local function wireInput(present, newTrove)
 	for _, part in parts do
 		if part:IsA("BasePart") then
 			newTrove:Connect(part.Touched, function(other)
-				if isOwnBall(other) then
+				if BallController.IsOwnBodyPart(other) then
 					claim()
 				end
 			end)

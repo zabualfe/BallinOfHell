@@ -1,6 +1,8 @@
 -- BallService
--- Owns every player's ball: clones the equipped ball model, writes the BallStats attributes, hands network
--- ownership to the player, seats the character on it, and audits the ball's speed at 10 Hz (GDD 3, 13).
+-- Owns every player's ball: clones the equipped ball model, writes the BallStats attributes, welds it to the player's
+-- HumanoidRootPart as a cosmetic shell, and audits the ball's speed at 10 Hz (GDD 3, 13).
+-- The root part is the only physical body (the player owns it as part of their character); the ball is massless and
+-- non-colliding, so its PrimaryPart reports the root's position and velocity and nothing rolls it.
 -- Ball models are authored in Studio (ServerStorage.Balls/<ModelName>, a Model whose PrimaryPart is a part named
 -- "Ball"). A missing model warns once and a plain sphere stands in so the game stays playable.
 --
@@ -53,8 +55,8 @@ BallService.StrikeAdded = Signal.new()
 
 -- ── Tuning ──────────────────────────────────────────────────────────────
 local BALLS_FOLDER_NAME = PhysicsTable.Ball.FolderName
+local ROOT_WELD_NAME = PhysicsTable.Ball.RootWeldName
 local PLACEHOLDER_SIZE = 4 -- studs, diameter of the stand-in sphere
-local SEAT_GAP = PhysicsTable.Ball.SeatGapStuds
 local BOOST_CACHE_SECONDS = 5 -- how long cached boost-part boxes are trusted
 local JUMP_IGNORE_TAG = "JumpIgnore"
 local BOOST_TAGS = { "BoostPanel", "JumpPad" }
@@ -177,17 +179,16 @@ local function addTrail(primary)
 	trail.Parent = primary
 end
 
-local function seatCharacter(character, ball)
-	for _, descendant in character:GetDescendants() do
-		if descendant:IsA("BasePart") then
-			descendant.Massless = true
-			descendant.CanCollide = false
-			CollectionService:AddTag(descendant, JUMP_IGNORE_TAG)
-		end
-	end
-	local ballHalf = ball:GetExtentsSize().Y / 2
-	local characterHalf = character:GetExtentsSize().Y / 2
-	character:PivotTo(ball:GetPivot() * CFrame.new(0, ballHalf + characterHalf + SEAT_GAP, 0))
+-- The ball's centre goes on the root's centre, so the cosmetic shell surrounds the body. A Weld (not a
+-- WeldConstraint) so clients can spin the ball through its C0 (BallRoll).
+local function attachToRoot(ball, root)
+	root:PivotTo(ball:GetPivot())
+	local weld = Instance.new("Weld")
+	weld.Name = ROOT_WELD_NAME
+	weld.Part0 = root
+	weld.Part1 = ball.PrimaryPart
+	weld.Parent = ball.PrimaryPart
+	root.Transparency = 1
 end
 
 local function destroyRecord(player)
@@ -302,21 +303,16 @@ function BallService.Spawn(player, cframe)
 	for _, descendant in ball:GetDescendants() do
 		if descendant:IsA("BasePart") then
 			descendant.Anchored = false
+			descendant.CanCollide = false
+			descendant.Massless = true
 			CollectionService:AddTag(descendant, JUMP_IGNORE_TAG)
 		end
 	end
 	addTrail(primary)
 	ball:PivotTo(cframe)
+	attachToRoot(ball, character.PrimaryPart)
 	ball.Parent = getBallsFolder()
 	records[player] = record
-
-	local ownerOk, ownerErr = pcall(function()
-		primary:SetNetworkOwner(player)
-	end)
-	if not ownerOk then
-		warn(`[BallService] SetNetworkOwner failed for {player.Name}: {ownerErr}`)
-	end
-	seatCharacter(character, ball)
 
 	-- If anything else removes the ball, drop the record so the audit stops.
 	record.Trove:Connect(ball.AncestryChanged, function(_, parent)
@@ -347,13 +343,10 @@ function BallService.Respawn(player, cframe)
 			descendant.AssemblyAngularVelocity = Vector3.zero
 		end
 	end
+	-- Welded to the root, so this moves the player too.
 	ball:PivotTo(cframe)
 	record.Sample = nil
 	table.clear(record.Tracker.Over)
-	local character = player.Character
-	if character and character.Parent then
-		seatCharacter(character, ball)
-	end
 	Network.FireClient(player, "BallPivot", cframe)
 	return true
 end

@@ -1,5 +1,5 @@
 -- CheckpointBuilder
--- Places the Start piece, a CheckpointFlag at every joint (including the finish) and the EndTrack, and
+-- Places a CheckpointFlag at every joint (including the finish) and the EndTrack, and
 -- records the checkpoint data CourseService hands to ProgressService.
 --
 -- Usage:

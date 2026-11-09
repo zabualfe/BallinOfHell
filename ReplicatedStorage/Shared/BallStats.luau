@@ -17,7 +17,7 @@
 --   MaxForce          force scale of the roll; reference 0.12 at rating 5. Turbo x1.10, then SlowEveryone x0.70.
 --   SmoothMoveRate    1/s, ground acceleration blend rate; 10 at rating 5.
 --   AirMoveRate       1/s, air acceleration blend rate; 6 at rating 5.
---   SmoothStopRate    1/s, stop blend rate; 6 for every ball.
+--   SmoothStopRate    1/s, stop blend rate; the same for every ball (PhysicsTable.Anchor).
 --   JumpPower         jump impulse scale; 0.25 at rating 5.
 --   DoubleJumpPower   JumpPower of the second jump (JumpPower x1.1).
 --   DoubleJumpEnabled boolean; true with the DoubleJump pass or DoubleJumpForAll.
@@ -40,6 +40,7 @@ local PhysicsTable = require(Tables.PhysicsTable)
 local BallTable = require(Tables.BallTable)
 local ToolTable = require(Tables.ToolTable)
 local ModifierTable = require(Tables.ModifierTable).Modifiers
+local BallMotion = require(script.Parent.BallMotion)
 
 local MIN_RATING = 1
 local MAX_RATING = 10
@@ -133,7 +134,9 @@ function BallStats.MaxAllowedSpeed(resolved, context)
 		multiplier = math.max(multiplier, ToolTable.Tools.rocket.SpeedMultiplier)
 	end
 
-	local expected = normal * multiplier
+	-- Steering in the air or downhill is faster than on flat ground (BallMotion), so allow the fastest of them.
+	local terrain = math.max(1, PhysicsTable.AirTopSpeedMultiplier, BallMotion.MaxDownhillMultiplier())
+	local expected = normal * multiplier * terrain
 	if context.Grappling then
 		expected = math.max(expected, ToolTable.Tools.grapple.PullSpeed)
 	end

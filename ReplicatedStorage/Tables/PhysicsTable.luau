@@ -9,7 +9,7 @@ local PhysicsTable = {
 		SmoothMoveRate = 10,
 		AirMoveRate = 6,
 		JumpPower = 0.25,
-		SmoothStopRate = 6, -- same for every ball
+		SmoothStopRate = 6, -- same for every ball; the Brake tool's stop blend rate (x StopRateMultiplier)
 	},
 	DoubleJumpPowerMultiplier = 1.1,
 
@@ -17,8 +17,24 @@ local PhysicsTable = {
 	-- BallMotion targets MaxForce / Anchor.MaxForce * this, and BallService's speed audit scales its limit from it,
 	-- so client feel and server limit can never drift apart.
 	AnchorTopSpeed = 40,
-	-- PLACEHOLDER (M1 feel test): vertical studs/s per point of JumpPower (0.25 at rating 5 -> 50 studs/s, ~6.4 stud hop).
-	JumpVelocityScale = 200,
+	-- PLACEHOLDER (feel test): share of the ball's own ground top speed it sheds each second when nothing is pressed on
+	-- the ground. Constant, not a blend, so it rolls to a stop instead of halting: 0.2 takes 5 s from top speed.
+	GroundDecelerationPerSecond = 0.2,
+	-- PLACEHOLDER (feel test): below Speed (studs/s) the ball creeps instead of stopping dead, losing speed at
+	-- DecayRate (1/s, exponential) so it drifts a couple of studs over a few seconds before it settles.
+	GroundCreep = { Speed = 4, DecayRate = 1.5 },
+	-- PLACEHOLDER (feel test): top speed while airborne and steering, as a multiple of the ground top speed. The
+	-- speed audit allows for it.
+	AirTopSpeedMultiplier = 1.25,
+	-- PLACEHOLDER (feel test): steering downhill on the ground raises the target speed by
+	-- 1 + DownhillSpeedPerSlope * sin(slope) * (how much of the input points downhill). Slopes past MaxSlopeDegrees
+	-- count as MaxSlopeDegrees. Uphill and across the slope change nothing. The speed audit allows the maximum.
+	Slope = {
+		DownhillSpeedPerSlope = 0.8, -- a 30 degree slope straight down gives 1.4x
+		MaxSlopeDegrees = 45,
+	},
+	-- PLACEHOLDER (M1 feel test): vertical studs/s per point of JumpPower (0.25 at rating 5 -> 65 studs/s, ~10.8 stud hop).
+	JumpVelocityScale = 260,
 
 	Curves = {
 		Speed = { Base = 0.80, PerRating = 0.04 }, -- drives MaxForce
@@ -37,10 +53,9 @@ local PhysicsTable = {
 		MinFraction = 0.4, -- floor for stacked gravity multipliers
 	},
 
-	-- Shared by BallService (seats the character) and BallController (keeps it seated).
 	Ball = {
 		FolderName = "Balls", -- workspace container for live balls; BallService creates it at runtime
-		SeatGapStuds = 0.5, -- between the ball top and the character's feet
+		RootWeldName = "RootWeld", -- Weld from the player's root to the cosmetic ball; BallRoll spins it via C0
 	},
 
 	Obstacles = {

@@ -1,7 +1,7 @@
 -- ProgressService
 -- Owns each racing player's course progress: checkpoint, falls, strikes, finish. Everything is decided on the
 -- server from the ball's 10 Hz sample (BallService.GetSample); the client sends nothing about checkpoints.
--- RoundService starts and stops it (StartPlayer / BeginRace / EndRace / ResetAll).
+-- RoundService opens the race once at server start (BeginRace) and starts each player's run (NewRun).
 --
 -- Economy contract: this module grants NO coins. EconomyService (next sprint) listens to CheckpointReached and
 -- Finished and pays. It must pay nothing for an index flagged in GetState(player).Skipped. CheckpointReached never
@@ -13,6 +13,8 @@
 --       is open. nil when the player already finished this round (they wait in the lobby). Progress is kept per
 --       UserId until ResetAll.
 --   ProgressService.HasFinished(player) -> boolean  -- finished this round, even if they left and rejoined
+--   ProgressService.NewRun(player) -> state?        -- endless play: forget the player's run (finished or not) and
+--                                                      start a fresh one at checkpoint 0
 --   ProgressService.BeginRace()                     -- opens the race: all states start racing, clocks restart
 --   ProgressService.EndRace()                       -- detection stops, states are kept for the results card
 --   ProgressService.IsRacing() -> boolean
@@ -364,6 +366,12 @@ function ProgressService.StartPlayer(player)
 	BallService.ResetStrikes(player)
 	setAttributes(player, state)
 	return state
+end
+
+function ProgressService.NewRun(player)
+	roundRecords[player.UserId] = nil
+	ProgressService.ResetPlayer(player)
+	return ProgressService.StartPlayer(player)
 end
 
 function ProgressService.BeginRace()
