@@ -111,7 +111,7 @@ Mobile layout rule: no gameplay button within 24 px of the screen edge or over t
 
 ### Stat → physics formula (`BallStats.Resolve`)
 
-Anchor: **rating 5 equals the reference `BallSystem` constants** (MaxForce 0.12, SmoothMoveRate 10, AirMoveRate 6, JumpPower 0.25). SmoothStopRate is **20** for every ball (2026-11-09: letting go on the ground stops far quicker than you accelerate). While airborne and steering, top speed is **1.25×** the ground top speed (`PhysicsTable.AirTopSpeedMultiplier`, *tune*); the speed audit allows for it. Steering downhill on the ground raises the target speed by `1 + 0.8 · sin(slope) · (share of input pointing downhill)`, slopes capped at 45° (`PhysicsTable.Slope`, *tune*); uphill changes nothing. The slope comes from a sphere cast under the body. Double jump keeps the reference 1.1× JumpPower.
+Anchor: **rating 5 equals the reference `BallSystem` constants** (MaxForce 0.12, SmoothMoveRate 10, AirMoveRate 6, JumpPower 0.25). Letting go on the ground sheds a constant **60 studs/s²** (`PhysicsTable.GroundDeceleration`, *tune*), so a ball rolls to a stop (0.67 s from 40 studs/s) instead of halting. SmoothStopRate is **6** for every ball and only drives the Brake tool. While airborne and steering, top speed is **1.25×** the ground top speed (`PhysicsTable.AirTopSpeedMultiplier`, *tune*); the speed audit allows for it. Steering downhill on the ground raises the target speed by `1 + 0.8 · sin(slope) · (share of input pointing downhill)`, slopes capped at 45° (`PhysicsTable.Slope`, *tune*); uphill changes nothing. The slope comes from a sphere cast under the body. Double jump keeps the reference 1.1× JumpPower.
 
 | Stat (1–10) | Multiplier `m(r)` | Drives | Range at r=1 … r=10 |
 |---|---|---|---|

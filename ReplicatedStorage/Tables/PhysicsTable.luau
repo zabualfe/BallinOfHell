@@ -9,7 +9,7 @@ local PhysicsTable = {
 		SmoothMoveRate = 10,
 		AirMoveRate = 6,
 		JumpPower = 0.25,
-		SmoothStopRate = 20, -- same for every ball; well above SmoothMoveRate so letting go on the ground stops fast
+		SmoothStopRate = 6, -- same for every ball; the Brake tool's stop blend rate (x StopRateMultiplier)
 	},
 	DoubleJumpPowerMultiplier = 1.1,
 
@@ -17,6 +17,9 @@ local PhysicsTable = {
 	-- BallMotion targets MaxForce / Anchor.MaxForce * this, and BallService's speed audit scales its limit from it,
 	-- so client feel and server limit can never drift apart.
 	AnchorTopSpeed = 40,
+	-- PLACEHOLDER (feel test): studs/s² a ball sheds when nothing is pressed on the ground. Constant, not a blend, so it
+	-- rolls to a stop instead of halting: 40 studs/s takes 0.67 s and about 13 studs.
+	GroundDeceleration = 60,
 	-- PLACEHOLDER (feel test): top speed while airborne and steering, as a multiple of the ground top speed. The
 	-- speed audit allows for it.
 	AirTopSpeedMultiplier = 1.25,

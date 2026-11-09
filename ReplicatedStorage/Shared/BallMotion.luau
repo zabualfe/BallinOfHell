@@ -10,7 +10,8 @@
 --       SlopeMultiplier (from DownhillMultiplier) scales the target speed on the ground only.
 --       Moving: horizontal velocity blends toward moveDirection * target speed (SmoothMoveRate toward the ground top
 --       speed on the ground; AirMoveRate toward the faster air top speed in the air). Not moving on the ground:
---       blends to zero at SmoothStopRate. Not moving in the air: momentum is kept. Y is never touched.
+--       horizontal speed drops by PhysicsTable.GroundDeceleration per second until it rolls to a stop. Not moving in
+--       the air: momentum is kept. Y is never touched.
 --   BallMotion.NewJumpState() / UpdateJumpState(state, rawGrounded, dt) -> grounded / RequestJump(state, doubleJumpEnabled)
 --       -> "Jump" | "DoubleJump" | nil
 --   BallMotion.MarkLaunched(state)                  -- after a jump pad
@@ -35,7 +36,6 @@ local BallMotion = {}
 local MIN_DT = 1e-4 -- seconds
 local MAX_DT = 0.1 -- seconds, a hitch must not slingshot the blend
 local MOVE_EPSILON = 1e-3 -- input magnitude below this counts as no input
-local STOP_SNAP_SPEED = 0.08 -- studs/s per axis, below this a stopping ball is set to zero
 local COYOTE_SECONDS = 0.1 -- ground jump still allowed this long after leaving the ground
 local ARRIVE_RADIUS = 3 -- studs from a grapple anchor that count as arrived
 local JUMP_LOCKOUT_SECONDS = 0.15 -- ground check is ignored this long after a jump so it can't reset the jump state
@@ -101,16 +101,14 @@ function BallMotion.Step(velocity, moveDirection, grounded, attrs, dt, options)
 	end
 
 	if grounded and canStop then
-		local keep = 1 - (1 - math.exp(-attrs.SmoothStopRate * dt))
-		local x = velocity.X * keep
-		local z = velocity.Z * keep
-		if math.abs(x) < STOP_SNAP_SPEED then
-			x = 0
+		local horizontal = Vector3.new(velocity.X, 0, velocity.Z)
+		local speed = horizontal.Magnitude
+		local slowed = math.max(speed - PhysicsTable.GroundDeceleration * dt, 0)
+		if slowed <= 0 then
+			return Vector3.new(0, velocity.Y, 0)
 		end
-		if math.abs(z) < STOP_SNAP_SPEED then
-			z = 0
-		end
-		return Vector3.new(x, velocity.Y, z)
+		local kept = horizontal * (slowed / speed)
+		return Vector3.new(kept.X, velocity.Y, kept.Z)
 	end
 
 	return velocity
