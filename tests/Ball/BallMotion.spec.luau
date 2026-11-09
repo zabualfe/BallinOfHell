@@ -90,6 +90,15 @@ describe("BallMotion", function()
 		expect(diagonal.X / diagonal.Z):near(30 / 40, 1e-6)
 	end)
 
+	it("creeps below GroundCreep.Speed instead of stopping dead", function()
+		local creep = PhysicsTable.GroundCreep
+		local fast = BallMotion.Step(Vector3.new(creep.Speed + 0.5, 0, 0), Vector3.zero, true, attrs, 0.1)
+		expect(fast.X):near(creep.Speed, 1e-6)
+		local slow = BallMotion.Step(Vector3.new(2, 0, 0), Vector3.zero, true, attrs, 0.1)
+		expect(slow.X):near(2 * math.exp(-creep.DecayRate * 0.1), 1e-6)
+		expect(slow.X > 0):truthy()
+	end)
+
 	it("steers slower in the air than on the ground", function()
 		local ground = BallMotion.Step(Vector3.zero, Vector3.new(0, 0, 1), true, attrs, 0.1)
 		local air = BallMotion.Step(Vector3.zero, Vector3.new(0, 0, 1), false, attrs, 0.1)

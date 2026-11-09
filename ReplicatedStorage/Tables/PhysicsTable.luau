@@ -18,8 +18,11 @@ local PhysicsTable = {
 	-- so client feel and server limit can never drift apart.
 	AnchorTopSpeed = 40,
 	-- PLACEHOLDER (feel test): studs/s² a ball sheds when nothing is pressed on the ground. Constant, not a blend, so it
-	-- rolls to a stop instead of halting: 40 studs/s takes 0.67 s and about 13 studs.
+	-- rolls to a stop instead of halting: 40 studs/s takes about 0.6 s to reach GroundCreep.Speed.
 	GroundDeceleration = 60,
+	-- PLACEHOLDER (feel test): below Speed (studs/s) the ball creeps instead of stopping dead, losing speed at
+	-- DecayRate (1/s, exponential) so it drifts a couple of studs over a few seconds before it settles.
+	GroundCreep = { Speed = 4, DecayRate = 1.5 },
 	-- PLACEHOLDER (feel test): top speed while airborne and steering, as a multiple of the ground top speed. The
 	-- speed audit allows for it.
 	AirTopSpeedMultiplier = 1.25,
