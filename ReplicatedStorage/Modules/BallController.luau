@@ -6,7 +6,8 @@
 -- and a Humanoid, no avatar). The ball model is cosmetic: BallService welds it to the root, massless and non-colliding,
 -- so it never rolls. Once bound, every physics step a VectorForce on the root pushes its horizontal velocity toward the
 -- humanoid's MoveDirection (the default control module, so keyboard, gamepad and touch all work); an AlignOrientation
--- holds it upright facing the camera; jumps set vertical velocity.
+-- holds it upright facing the camera. Jumps set vertical velocity directly; the Humanoid's own jump is disabled.
+-- BallRoll spins the cosmetic ball.
 -- All numbers come from the ball's stat attributes (BallStats contract) and the maths lives in Shared/BallMotion.
 --
 -- Hooks for other client systems (ObstacleController, tools):
@@ -366,6 +367,12 @@ function BallController.CharacterAdded(_, newCharacter)
 		characterTrove:Destroy()
 	end
 	character = newCharacter
+	-- Jump input still fires JumpRequest (and keeps the touch jump button), but only our jump acts on it.
+	local humanoid = newCharacter:FindFirstChildOfClass("Humanoid")
+		or newCharacter:WaitForChild("Humanoid", WAIT_TIMEOUT)
+	if humanoid and character == newCharacter then
+		humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, false)
+	end
 	characterTrove = Trove.new()
 	bindTrove, bindingBall = nil, nil
 	tryBind()

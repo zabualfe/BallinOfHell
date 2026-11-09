@@ -5,7 +5,11 @@ describe("SpeedAudit", function()
 
 	local DT = PhysicsTable.SpeedAudit.SampleSeconds
 	local sprinter = BallStats.ForBall("sprinter")
-	local normalTop = PhysicsTable.AnchorTopSpeed * sprinter.MaxForce / PhysicsTable.Anchor.MaxForce
+	-- The fastest legal speed: steering in the air (BallMotion's air top speed).
+	local normalTop = PhysicsTable.AnchorTopSpeed
+		* sprinter.MaxForce
+		/ PhysicsTable.Anchor.MaxForce
+		* PhysicsTable.AirTopSpeedMultiplier
 
 	-- Fake clock: runs 10 Hz samples at a constant speed, returns the time of the first strike (or nil).
 	local function run(tracker, resolved, speed, seconds, startTime)

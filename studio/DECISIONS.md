@@ -3,6 +3,7 @@
 Newest first. Director decisions are marked 🎬. Routine team calls are marked 🛠.
 
 ## 2026-11-09
+- 🎬 **The cosmetic ball rolls by CFrame; jump only sets upward velocity; ground stops fast; air top speed is higher.** BallRoll spins each ball through its root Weld's C0 on every client. The Humanoid's own jump is disabled. SmoothStopRate 6 → 20. Airborne steering targets 1.25× the ground top speed (`AirTopSpeedMultiplier`, tune) and the speed audit allows it.
 - 🎬 **The ball is purely cosmetic; a VectorForce moves the player's part.** The root part (a frictionless 4-stud sphere) is the only physical body. The ball model is welded to it, massless and non-colliding, and an AlignOrientation keeps anything from rolling. Why: back to basics on core movement.
 - 🎬 **The player character is just a Humanoid and its root part.** `StarterPlayer.StarterCharacter` replaces the avatar (`LoadCharacterAppearance` off), and the rider animations are gone from BallController. Why: back to basics on core ball movement. Trick animations have no rider to play on until tricks get a new form.
 

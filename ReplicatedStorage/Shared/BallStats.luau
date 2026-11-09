@@ -17,7 +17,7 @@
 --   MaxForce          force scale of the roll; reference 0.12 at rating 5. Turbo x1.10, then SlowEveryone x0.70.
 --   SmoothMoveRate    1/s, ground acceleration blend rate; 10 at rating 5.
 --   AirMoveRate       1/s, air acceleration blend rate; 6 at rating 5.
---   SmoothStopRate    1/s, stop blend rate; 6 for every ball.
+--   SmoothStopRate    1/s, stop blend rate; the same for every ball (PhysicsTable.Anchor).
 --   JumpPower         jump impulse scale; 0.25 at rating 5.
 --   DoubleJumpPower   JumpPower of the second jump (JumpPower x1.1).
 --   DoubleJumpEnabled boolean; true with the DoubleJump pass or DoubleJumpForAll.
@@ -133,7 +133,8 @@ function BallStats.MaxAllowedSpeed(resolved, context)
 		multiplier = math.max(multiplier, ToolTable.Tools.rocket.SpeedMultiplier)
 	end
 
-	local expected = normal * multiplier
+	-- Steering in the air is faster than on the ground (BallMotion), so that is the top speed to allow.
+	local expected = normal * multiplier * math.max(1, PhysicsTable.AirTopSpeedMultiplier)
 	if context.Grappling then
 		expected = math.max(expected, ToolTable.Tools.grapple.PullSpeed)
 	end

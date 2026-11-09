@@ -55,6 +55,7 @@ BallService.StrikeAdded = Signal.new()
 
 -- ── Tuning ──────────────────────────────────────────────────────────────
 local BALLS_FOLDER_NAME = PhysicsTable.Ball.FolderName
+local ROOT_WELD_NAME = PhysicsTable.Ball.RootWeldName
 local PLACEHOLDER_SIZE = 4 -- studs, diameter of the stand-in sphere
 local BOOST_CACHE_SECONDS = 5 -- how long cached boost-part boxes are trusted
 local JUMP_IGNORE_TAG = "JumpIgnore"
@@ -178,12 +179,14 @@ local function addTrail(primary)
 	trail.Parent = primary
 end
 
--- The ball's centre goes on the root's centre, so the cosmetic shell surrounds the body.
+-- The ball's centre goes on the root's centre, so the cosmetic shell surrounds the body. A Weld (not a
+-- WeldConstraint) so clients can spin the ball through its C0 (BallRoll).
 local function attachToRoot(ball, root)
 	root:PivotTo(ball:GetPivot())
-	local weld = Instance.new("WeldConstraint")
-	weld.Part0 = ball.PrimaryPart
-	weld.Part1 = root
+	local weld = Instance.new("Weld")
+	weld.Name = ROOT_WELD_NAME
+	weld.Part0 = root
+	weld.Part1 = ball.PrimaryPart
 	weld.Parent = ball.PrimaryPart
 	root.Transparency = 1
 end

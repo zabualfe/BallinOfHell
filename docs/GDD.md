@@ -109,7 +109,7 @@ Mobile layout rule: no gameplay button within 24 px of the screen edge or over t
 
 ### Stat → physics formula (`BallStats.Resolve`)
 
-Anchor: **rating 5 equals the reference `BallSystem` constants** (MaxForce 0.12, SmoothMoveRate 10, AirMoveRate 6, JumpPower 0.25). SmoothStopRate stays at the reference 6 for every ball. Double jump keeps the reference 1.1× JumpPower.
+Anchor: **rating 5 equals the reference `BallSystem` constants** (MaxForce 0.12, SmoothMoveRate 10, AirMoveRate 6, JumpPower 0.25). SmoothStopRate is **20** for every ball (2026-11-09: letting go on the ground stops far quicker than you accelerate). While airborne and steering, top speed is **1.25×** the ground top speed (`PhysicsTable.AirTopSpeedMultiplier`, *tune*); the speed audit allows for it. Double jump keeps the reference 1.1× JumpPower.
 
 | Stat (1–10) | Multiplier `m(r)` | Drives | Range at r=1 … r=10 |
 |---|---|---|---|

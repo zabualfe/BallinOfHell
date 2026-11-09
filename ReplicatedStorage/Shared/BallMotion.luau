@@ -2,11 +2,12 @@
 -- Pure movement maths for the client-owned ball (ported from the reference BallSystem:Update / Jump). No Instances,
 -- no side effects; BallController feeds it velocities and ball attributes (the BallStats contract) once per frame.
 --
---   BallMotion.TargetSpeed(attrs, speedMultiplier?) -> studs/s
+--   BallMotion.TargetSpeed(attrs, speedMultiplier?, grounded?) -> studs/s   -- airborne: x AirTopSpeedMultiplier
 --   BallMotion.Step(velocity, moveDirection, grounded, attrs, dt, options?) -> Vector3
 --       options { SpeedMultiplier = 1, CanControl = true, CanStop = true }
---       Moving: horizontal velocity blends toward moveDirection * target speed (SmoothMoveRate on the ground,
---       AirMoveRate in the air). Not moving on the ground: blends to zero at SmoothStopRate. Y is never touched.
+--       Moving: horizontal velocity blends toward moveDirection * target speed (SmoothMoveRate toward the ground top
+--       speed on the ground; AirMoveRate toward the faster air top speed in the air). Not moving on the ground:
+--       blends to zero at SmoothStopRate. Not moving in the air: momentum is kept. Y is never touched.
 --   BallMotion.NewJumpState() / UpdateJumpState(state, rawGrounded, dt) -> grounded / RequestJump(state, doubleJumpEnabled)
 --       -> "Jump" | "DoubleJump" | nil
 --   BallMotion.MarkLaunched(state)                  -- after a jump pad
@@ -40,8 +41,12 @@ local function blend(current, target, rate, dt)
 	return current + (target - current) * (1 - math.exp(-rate * dt))
 end
 
-function BallMotion.TargetSpeed(attrs, speedMultiplier)
-	return attrs.MaxForce * (PhysicsTable.AnchorTopSpeed / PhysicsTable.Anchor.MaxForce) * (speedMultiplier or 1)
+function BallMotion.TargetSpeed(attrs, speedMultiplier, grounded)
+	local airMultiplier = if grounded == false then PhysicsTable.AirTopSpeedMultiplier else 1
+	return attrs.MaxForce
+		* (PhysicsTable.AnchorTopSpeed / PhysicsTable.Anchor.MaxForce)
+		* (speedMultiplier or 1)
+		* airMultiplier
 end
 
 function BallMotion.Step(velocity, moveDirection, grounded, attrs, dt, options)
@@ -54,7 +59,7 @@ function BallMotion.Step(velocity, moveDirection, grounded, attrs, dt, options)
 		if not canControl then
 			return velocity
 		end
-		local speed = BallMotion.TargetSpeed(attrs, options and options.SpeedMultiplier)
+		local speed = BallMotion.TargetSpeed(attrs, options and options.SpeedMultiplier, grounded)
 		local target = flat * speed
 		if target.Magnitude > speed and speed > 0 then
 			target = target.Unit * speed

@@ -9,7 +9,7 @@ local PhysicsTable = {
 		SmoothMoveRate = 10,
 		AirMoveRate = 6,
 		JumpPower = 0.25,
-		SmoothStopRate = 6, -- same for every ball
+		SmoothStopRate = 20, -- same for every ball; well above SmoothMoveRate so letting go on the ground stops fast
 	},
 	DoubleJumpPowerMultiplier = 1.1,
 
@@ -17,6 +17,9 @@ local PhysicsTable = {
 	-- BallMotion targets MaxForce / Anchor.MaxForce * this, and BallService's speed audit scales its limit from it,
 	-- so client feel and server limit can never drift apart.
 	AnchorTopSpeed = 40,
+	-- PLACEHOLDER (feel test): top speed while airborne and steering, as a multiple of the ground top speed. The
+	-- speed audit allows for it.
+	AirTopSpeedMultiplier = 1.25,
 	-- PLACEHOLDER (M1 feel test): vertical studs/s per point of JumpPower (0.25 at rating 5 -> 50 studs/s, ~6.4 stud hop).
 	JumpVelocityScale = 200,
 
@@ -39,6 +42,7 @@ local PhysicsTable = {
 
 	Ball = {
 		FolderName = "Balls", -- workspace container for live balls; BallService creates it at runtime
+		RootWeldName = "RootWeld", -- Weld from the player's root to the cosmetic ball; BallRoll spins it via C0
 	},
 
 	Obstacles = {

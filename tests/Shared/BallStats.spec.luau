@@ -17,7 +17,7 @@ describe("BallStats", function()
 			expect(r.SmoothMoveRate):near(row[2], EPS)
 			expect(r.AirMoveRate):near(row[3], EPS)
 			expect(r.JumpPower):near(row[4], EPS)
-			expect(r.SmoothStopRate):equal(6)
+			expect(r.SmoothStopRate):equal(PhysicsTable.Anchor.SmoothStopRate)
 			expect(r.DoubleJumpPower):near(row[4] * 1.1, EPS)
 		end)
 	end
@@ -71,9 +71,10 @@ describe("BallStats", function()
 		local TOP = 50 -- studs/s at the anchor MaxForce, arbitrary for the test
 		local r10 = BallStats.Resolve({ Speed = 10, Acceleration = 5, Jump = 5 })
 		local normalTop = TOP * 0.144 / 0.12
+		local AIR = PhysicsTable.AirTopSpeedMultiplier
 
-		it("allows 1.25x normal top speed", function()
-			expect(BallStats.MaxAllowedSpeed(r10, { AnchorTopSpeed = TOP })):near(normalTop * 1.25, EPS)
+		it("allows 1.25x the air top speed", function()
+			expect(BallStats.MaxAllowedSpeed(r10, { AnchorTopSpeed = TOP })):near(normalTop * AIR * 1.25, EPS)
 		end)
 
 		it("flags a Speed-10 ball held at 1.6x normal top speed with no boost", function()
@@ -82,16 +83,19 @@ describe("BallStats", function()
 
 		it("allows 1.6x during a boost or rocket, without stacking them", function()
 			local boosted = BallStats.MaxAllowedSpeed(r10, { AnchorTopSpeed = TOP, Boosting = true })
-			expect(boosted):near(normalTop * 1.6 * 1.25, EPS)
+			expect(boosted):near(normalTop * 1.6 * AIR * 1.25, EPS)
 			local both = BallStats.MaxAllowedSpeed(r10, { AnchorTopSpeed = TOP, Boosting = true, Rocketing = true })
 			expect(both):near(boosted, EPS)
 		end)
 
 		it("allows grapple pull speed and tracks the resolved MaxForce", function()
-			expect(BallStats.MaxAllowedSpeed(r10, { AnchorTopSpeed = TOP, Grappling = true })):near(80 * 1.25, EPS)
+			expect(BallStats.MaxAllowedSpeed(r10, { AnchorTopSpeed = TOP, Grappling = true })):near(
+				math.max(80, normalTop * AIR) * 1.25,
+				EPS
+			)
 			local slow = BallStats.Resolve({ Speed = 10, Acceleration = 5, Jump = 5 }, nil, { SlowEveryone = true })
 			expect(BallStats.MaxAllowedSpeed(slow, { AnchorTopSpeed = TOP })):near(
-				normalTop * PhysicsTable.Modifiers.SlowEveryoneMaxForce * 1.25,
+				normalTop * PhysicsTable.Modifiers.SlowEveryoneMaxForce * AIR * 1.25,
 				EPS
 			)
 		end)

@@ -31,6 +31,21 @@ describe("BallMotion", function()
 		expect(t):near(math.log(10) / attrs.SmoothMoveRate, 0.02)
 	end)
 
+	it("has a faster top speed in the air than on the ground", function()
+		local airTop = BallMotion.TargetSpeed(attrs, nil, false)
+		expect(airTop):near(top * PhysicsTable.AirTopSpeedMultiplier, 0.0001)
+		expect(BallMotion.TargetSpeed(attrs, nil, true)):near(top, 0.0001)
+		local v = Vector3.zero
+		for _ = 1, 600 do
+			v = BallMotion.Step(v, Vector3.new(1, 0, 0), false, attrs, 1 / 60)
+		end
+		expect(v.X):near(airTop, 0.01)
+	end)
+
+	it("stops on the ground faster than it accelerates", function()
+		expect(attrs.SmoothStopRate > attrs.SmoothMoveRate):truthy()
+	end)
+
 	it("steers slower in the air than on the ground", function()
 		local ground = BallMotion.Step(Vector3.zero, Vector3.new(0, 0, 1), true, attrs, 0.1)
 		local air = BallMotion.Step(Vector3.zero, Vector3.new(0, 0, 1), false, attrs, 0.1)
