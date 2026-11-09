@@ -81,12 +81,13 @@ describe("BallMotion", function()
 		end)
 	end)
 
-	it("rolls to a stop on the ground at GroundDeceleration instead of halting", function()
+	it("sheds GroundDecelerationPerSecond of top speed each second on the ground instead of halting", function()
+		local deceleration = PhysicsTable.GroundDecelerationPerSecond * top
 		local v = BallMotion.Step(Vector3.new(30, 4, 0), Vector3.zero, true, attrs, 0.1)
-		expect(v.X):near(30 - PhysicsTable.GroundDeceleration * 0.1, 1e-6)
+		expect(v.X):near(30 - deceleration * 0.1, 1e-6)
 		expect(v.Y):equal(4)
 		local diagonal = BallMotion.Step(Vector3.new(30, 0, 40), Vector3.zero, true, attrs, 0.1)
-		expect(diagonal.Magnitude):near(50 - PhysicsTable.GroundDeceleration * 0.1, 1e-6)
+		expect(diagonal.Magnitude):near(50 - deceleration * 0.1, 1e-6)
 		expect(diagonal.X / diagonal.Z):near(30 / 40, 1e-6)
 	end)
 

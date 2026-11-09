@@ -17,9 +17,9 @@ local PhysicsTable = {
 	-- BallMotion targets MaxForce / Anchor.MaxForce * this, and BallService's speed audit scales its limit from it,
 	-- so client feel and server limit can never drift apart.
 	AnchorTopSpeed = 40,
-	-- PLACEHOLDER (feel test): studs/s² a ball sheds when nothing is pressed on the ground. Constant, not a blend, so it
-	-- rolls to a stop instead of halting: 40 studs/s takes about 0.6 s to reach GroundCreep.Speed.
-	GroundDeceleration = 60,
+	-- PLACEHOLDER (feel test): share of the ball's own ground top speed it sheds each second when nothing is pressed on
+	-- the ground. Constant, not a blend, so it rolls to a stop instead of halting: 0.2 takes 5 s from top speed.
+	GroundDecelerationPerSecond = 0.2,
 	-- PLACEHOLDER (feel test): below Speed (studs/s) the ball creeps instead of stopping dead, losing speed at
 	-- DecayRate (1/s, exponential) so it drifts a couple of studs over a few seconds before it settles.
 	GroundCreep = { Speed = 4, DecayRate = 1.5 },

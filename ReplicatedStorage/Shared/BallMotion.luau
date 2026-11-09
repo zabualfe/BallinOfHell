@@ -10,9 +10,9 @@
 --       SlopeMultiplier (from DownhillMultiplier) scales the target speed on the ground only.
 --       Moving: horizontal velocity blends toward moveDirection * target speed (SmoothMoveRate toward the ground top
 --       speed on the ground; AirMoveRate toward the faster air top speed in the air). Not moving on the ground:
---       horizontal speed drops by PhysicsTable.GroundDeceleration per second down to GroundCreep.Speed, then fades
---       at GroundCreep.DecayRate so the ball drifts a little before it settles. Not moving in the air: momentum is
---       kept. Y is never touched.
+--       horizontal speed drops by GroundDecelerationPerSecond x its top speed each second down to GroundCreep.Speed,
+--       then fades at GroundCreep.DecayRate so the ball drifts a little before it settles. Not moving in the air:
+--       momentum is kept. Y is never touched.
 --   BallMotion.NewJumpState() / UpdateJumpState(state, rawGrounded, dt) -> grounded / RequestJump(state, doubleJumpEnabled)
 --       -> "Jump" | "DoubleJump" | nil
 --   BallMotion.MarkLaunched(state)                  -- after a jump pad
@@ -107,7 +107,10 @@ function BallMotion.Step(velocity, moveDirection, grounded, attrs, dt, options)
 		local speed = horizontal.Magnitude
 		local creep = PhysicsTable.GroundCreep
 		local slowed = if speed > creep.Speed
-			then math.max(speed - PhysicsTable.GroundDeceleration * dt, creep.Speed)
+			then math.max(
+				speed - PhysicsTable.GroundDecelerationPerSecond * BallMotion.TargetSpeed(attrs) * dt,
+				creep.Speed
+			)
 			else speed * math.exp(-creep.DecayRate * dt)
 		if slowed < SETTLE_SPEED then
 			return Vector3.new(0, velocity.Y, 0)
