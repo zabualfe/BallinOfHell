@@ -37,10 +37,8 @@ local PhysicsTable = {
 		MinFraction = 0.4, -- floor for stacked gravity multipliers
 	},
 
-	-- Shared by BallService (seats the character) and BallController (keeps it seated).
 	Ball = {
 		FolderName = "Balls", -- workspace container for live balls; BallService creates it at runtime
-		SeatGapStuds = 0.5, -- between the ball top and the character's feet
 	},
 
 	Obstacles = {

@@ -182,7 +182,7 @@ local function returnToLobby(player)
 	BallService.Despawn(player)
 	ProgressService.ResetPlayer(player)
 	if player.Parent then
-		-- A fresh character: BallService leaves the seated one massless and non-colliding.
+		-- A fresh character: BallService made the old root invisible under the ball.
 		local ok, err = pcall(player.LoadCharacter, player)
 		if not ok then
 			warn(`[RoundService] LoadCharacter failed for {player.Name}: {err}`)

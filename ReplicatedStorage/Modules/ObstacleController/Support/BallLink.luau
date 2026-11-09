@@ -3,6 +3,7 @@
 --
 -- BallController API used here:
 --   BallController.GetBall() -> Model?                  the local player's ball model, nil between lives
+--   BallController.IsOwnBodyPart(part) -> boolean       the ball or the root part that carries it
 --   BallController.SetSpeedMultiplier(source, multiplier)   BallLink owns the source "BoostPanel" and animates it for boosts (one
 --                                                       envelope at a time); other sources (Rocket) overlap with it
 --   BallController.ApplyJumpPad(jumpPower)              sets vertical velocity from the pad's JumpPower
@@ -35,8 +36,7 @@ function BallLink.GetBall()
 end
 
 function BallLink.IsLocalBallPart(part)
-	local ball = BallLink.GetBall()
-	return ball ~= nil and part:IsDescendantOf(ball)
+	return BallController.IsOwnBodyPart(part)
 end
 
 function BallLink.Reset()
