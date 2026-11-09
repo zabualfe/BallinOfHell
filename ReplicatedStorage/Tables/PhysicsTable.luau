@@ -33,8 +33,8 @@ local PhysicsTable = {
 		DownhillSpeedPerSlope = 0.8, -- a 30 degree slope straight down gives 1.4x
 		MaxSlopeDegrees = 45,
 	},
-	-- PLACEHOLDER (M1 feel test): vertical studs/s per point of JumpPower (0.25 at rating 5 -> 50 studs/s, ~6.4 stud hop).
-	JumpVelocityScale = 200,
+	-- PLACEHOLDER (M1 feel test): vertical studs/s per point of JumpPower (0.25 at rating 5 -> 65 studs/s, ~10.8 stud hop).
+	JumpVelocityScale = 260,
 
 	Curves = {
 		Speed = { Base = 0.80, PerRating = 0.04 }, -- drives MaxForce
