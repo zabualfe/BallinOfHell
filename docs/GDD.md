@@ -61,6 +61,8 @@ In the race: big air makes your rider do automatic tricks for bonus coins (§7).
 
 ### Round flow (`RoundService` steps)
 
+> **Superseded 2026-11-09 (Director):** there are no round steps for now. The course is built once when the server starts, chained from `workspace.Lobby.Start`'s pivot, and stays up. Players spawn in the lobby already in ball mode and roll onto the course; a finish sends them back to the lobby after 5 s for a new run. The table below is the old design, kept for when rounds return.
+
 | Step | Duration | What happens | UI |
 |---|---|---|---|
 | **Intermission** | 20 s | Players are in the lobby (shop, wheel, gifts open). If 0 players are in the server, the step waits. | Big "Next race in 0:20". Countdown beeps at 5..1. |

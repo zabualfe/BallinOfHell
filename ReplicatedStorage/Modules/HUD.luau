@@ -41,11 +41,7 @@ local NO_TIME_TEXT = "--:--"
 local TEMP_SLOT = 0
 local ROUND_RACE_STATE = "Race"
 local STATE_TEXT = {
-	Intermission = "Next round starting soon",
-	BuildCourse = "Building the course...",
-	Countdown = "Get ready!",
-	Results = "Round over!",
-	Teardown = "Round over!",
+	Loading = "Loading the course...",
 }
 local GRADE_COLORS = {
 	Clean = Color3.fromRGB(255, 202, 64),
@@ -200,7 +196,7 @@ local function setup(gui)
 	showRoundState()
 
 	-- ── Season XP ───────────────────────────────────────────────────────
-	-- Hidden until the first round ends (GDD 10.1), or at once for a player who already has XP.
+	-- Hidden until the player's first finish (GDD 10.1), or at once for a player who already has XP.
 	local isSeasonUnlocked = false
 	local function showSeason()
 		local xp = localPlayer:GetAttribute("SeasonXp") or 0
@@ -224,9 +220,11 @@ local function setup(gui)
 	end
 	ownAttribute("SeasonXp", showSeason)
 	ownAttribute("SeasonTier", showSeason)
-	Network.OnEvent("RoundResults", function()
-		isSeasonUnlocked = true
-		showSeason()
+	Network.OnEvent("PlayerFinished", function(name)
+		if name == localPlayer.Name then
+			isSeasonUnlocked = true
+			showSeason()
+		end
 	end)
 	showSeason()
 

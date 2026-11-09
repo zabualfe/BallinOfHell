@@ -1,7 +1,9 @@
 -- CourseService
 -- Builds the 30-segment course under workspace.Course and answers geometry questions about it.
+-- The first segment always starts on the pivot of workspace.Lobby.Start (a part in the lobby), so the course runs
+-- straight out of the lobby; that pivot is also the start line (checkpoint 0).
 -- Segment models are authored in Studio (ServerStorage.Segments/<Tier>/<Name>, ServerStorage.CourseParts
--- holding Start, CheckpointFlag and EndTrack); this module never creates them. Missing or empty folders
+-- holding CheckpointFlag and EndTrack); this module never creates them. Missing or empty folders
 -- warn once and build nothing. A segment that breaks the authoring contract warns and is skipped.
 --
 -- Public API (ProgressService and RoundService use it):
@@ -39,7 +41,9 @@ local CourseService = {}
 CourseService.Built = Signal.new()
 
 -- ── Tuning ──────────────────────────────────────────────────────────────
-local COURSE_ORIGIN_CFRAME = CFrame.new(0, 100, 0) -- where the Start piece's StartPart goes
+local LOBBY_NAME = "Lobby"
+local LOBBY_START_NAME = "Start" -- workspace.Lobby.Start: its pivot is where the first segment's StartPart goes
+local COURSE_ORIGIN_FALLBACK = CFrame.new(0, 100, 0) -- used (with a warning) when workspace.Lobby.Start is missing
 local SPAWN_LIFT = 4 -- studs above a checkpoint or the start line where a ball is placed
 local FALL_FOOTPRINT_MARGIN = 4 -- studs shaved off each side of a segment's fall footprint
 local SEGMENT_TEST_NAME = "" -- Studio only: segment name to build alone; the SegmentTest attribute overrides it
@@ -209,8 +213,22 @@ function CourseService.Teardown()
 	courseSeed = nil
 end
 
--- Clones and joins every selected segment under folder. Returns checkpoints, boxes, names, or nil if torn down.
-local function buildSegments(selection, pool, templates, folder, myGeneration)
+local function getCourseOrigin()
+	local lobby = workspace:FindFirstChild(LOBBY_NAME)
+	local start = lobby and lobby:FindFirstChild(LOBBY_START_NAME)
+	if start and start:IsA("PVInstance") then
+		return start:GetPivot()
+	end
+	warnOnce(
+		"NoLobbyStart",
+		`workspace.{LOBBY_NAME}.{LOBBY_START_NAME} (a part or model) is missing; the course starts at the fallback origin`
+	)
+	return COURSE_ORIGIN_FALLBACK
+end
+
+-- Clones and joins every selected segment under folder, starting at origin. Returns checkpoints, boxes, names, or
+-- nil if torn down.
+local function buildSegments(selection, pool, templates, folder, myGeneration, origin)
 	local partsFolder = ServerStorage:FindFirstChild("CourseParts")
 	if not partsFolder then
 		warnOnce("NoCourseParts", "ServerStorage.CourseParts is missing; building without Start, flags or EndTrack")
@@ -225,7 +243,7 @@ local function buildSegments(selection, pool, templates, folder, myGeneration)
 	local flagTemplate, endTrackTemplate = getPart("CheckpointFlag"), getPart("EndTrack")
 
 	local newCheckpoints, boxes, names = {}, {}, {}
-	local _, anchorCF = CheckpointBuilder.Place(getPart("Start"), COURSE_ORIGIN_CFRAME, folder)
+	local anchorCF = origin
 
 	for index, choice in selection do
 		-- One segment per frame so the server does not hitch.
@@ -281,7 +299,9 @@ function CourseService.Build(seed)
 	folder.Name = "Course"
 	folder.Parent = workspace
 
-	local ok, newCheckpoints, boxes, names = pcall(buildSegments, selection, pool, templates, folder, myGeneration)
+	local origin = getCourseOrigin()
+	local ok, newCheckpoints, boxes, names =
+		pcall(buildSegments, selection, pool, templates, folder, myGeneration, origin)
 	if myGeneration ~= generation then
 		-- Teardown ran mid-build and already reset the flags; just drop the partial folder.
 		folder:Destroy()
@@ -306,7 +326,7 @@ function CourseService.Build(seed)
 	checkpoints = newCheckpoints
 	fallZones = zones
 	fallFloorY = FallZones.GetFloorY(zones, CourseTable.Progress.YFloorBelowLowestSegment)
-	startCFrame = COURSE_ORIGIN_CFRAME
+	startCFrame = origin
 	courseSeed = seed
 	lastPicks = picks or lastPicks
 	isBuilding = false
