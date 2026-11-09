@@ -2,6 +2,9 @@
 
 Newest first. Director decisions are marked 🎬. Routine team calls are marked 🛠.
 
+## 2026-11-09
+- 🎬 **The player character is just a Humanoid and its root part.** `StarterPlayer.StarterCharacter` replaces the avatar (`LoadCharacterAppearance` off), and the rider animations are gone from BallController. Why: back to basics on core ball movement. Trick animations have no rider to play on until tricks get a new form.
+
 ## 2026-11-08 (Sprint 5)
 - 🎬 **The Studio place is "ballin v2 the sequel"** (placeId 122054442557559). "KC Dev" is a different project; don't touch it.
 - 🎬 **Remaining UI is designed in Figma this sprint.**

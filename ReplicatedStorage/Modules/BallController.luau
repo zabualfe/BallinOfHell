@@ -3,6 +3,7 @@
 -- Player attribute (UserId), never through a remote Instance, which would arrive nil if it had not streamed in.
 -- BallSpawned is only a "rescan now" nudge. Once bound, every physics step: horizontal velocity blends toward the humanoid's MoveDirection (the default control
 -- module, so keyboard, gamepad and touch all work), jumps set vertical velocity, and the character rides the ball.
+-- The character is only a Humanoid and its root part (StarterPlayer.StarterCharacter): no avatar, no animations.
 -- All numbers come from the ball's stat attributes (BallStats contract) and the maths lives in Shared/BallMotion.
 --
 -- Hooks for other client systems (ObstacleController, tools):
@@ -50,9 +51,7 @@ local SHADOW_RAY_LENGTH = 1000 -- studs
 local SEAT_GAP = PhysicsTable.Ball.SeatGapStuds
 local BALLS_FOLDER_NAME = PhysicsTable.Ball.FolderName
 local ALIGN_RESPONSIVENESS = 200
-local MOVING_SPEED = 0.5 -- studs/s, below this a grounded ball with no input plays the idle pose
 local JUMP_IGNORE_TAG = "JumpIgnore"
-local ANIMATION_FOLDERS = { Rolling = "run", Falling = "fall", Standing = "idle" } -- Animate script children
 
 local characterTrove = nil -- one per life
 local bindTrove = nil -- one per ball, child of characterTrove
@@ -68,40 +67,6 @@ local moveOverride = nil -- Vector3? from a tool; replaces the humanoid's MoveDi
 local jumpState = BallMotion.NewJumpState()
 local boundPrimary = nil
 local warnedShadow = false
-
-local function getFirstTrack(animate, folderName)
-	local folder = animate:FindFirstChild(folderName)
-	local animation = folder and folder:FindFirstChildOfClass("Animation")
-	return animation
-end
-
-local function loadAnimations(humanoid)
-	local tracks = {}
-	local animate = character and character:FindFirstChild("Animate")
-	local animator = humanoid:FindFirstChildOfClass("Animator")
-	if not (animate and animator) then
-		return tracks
-	end
-	for name, folderName in ANIMATION_FOLDERS do
-		local animation = getFirstTrack(animate, folderName)
-		if animation then
-			tracks[name] = animator:LoadAnimation(animation)
-		end
-	end
-	return tracks
-end
-
-local function playAnimation(tracks, name)
-	for trackName, track in tracks do
-		if trackName ~= name and track.IsPlaying then
-			track:Stop()
-		end
-	end
-	local track = tracks[name]
-	if track and not track.IsPlaying then
-		track:Play()
-	end
-end
 
 local function makeShadow()
 	local assets = ReplicatedStorage:FindFirstChild("Assets")
@@ -203,15 +168,6 @@ local function bind(ball)
 	trove:Add(alignOrientation)
 
 	humanoid:ChangeState(Enum.HumanoidStateType.Physics)
-	for _, track in humanoid:GetPlayingAnimationTracks() do
-		track:Stop()
-	end
-	local tracks = loadAnimations(humanoid)
-	trove:Add(function()
-		for _, track in tracks do
-			track:Stop()
-		end
-	end)
 
 	local characterHalf = character:GetExtentsSize().Y / 2
 	local function seatPosition()
@@ -250,7 +206,6 @@ local function bind(ball)
 			return
 		end
 		primary.AssemblyLinearVelocity = BallMotion.ApplyJump(primary.AssemblyLinearVelocity, kind, attrs)
-		playAnimation(tracks, "Falling")
 	end)
 
 	trove:Connect(RunService.PreSimulation, function(dt)
@@ -302,14 +257,6 @@ local function bind(ball)
 					shadow.Parent = nil
 				end
 			end
-		end
-
-		if not grounded then
-			playAnimation(tracks, "Falling")
-		elseif moveDirection.Magnitude > 1e-3 then
-			playAnimation(tracks, "Rolling")
-		elseif Vector3.new(stepped.X, 0, stepped.Z).Magnitude < MOVING_SPEED then
-			playAnimation(tracks, "Standing")
 		end
 	end)
 
